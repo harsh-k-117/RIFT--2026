@@ -1,7 +1,7 @@
 {
-  "name": "aegisgraph-backend",
+  "name": "fraud-netra-backend",
   "version": "1.0.0",
-  "description": "AegisGraph Financial Crime Detection Engine - Backend API",
+  "description": "Fraud Netra Financial Crime Detection Engine - Backend API",
   "main": "index.js",
   "type": "module",
   "scripts": {

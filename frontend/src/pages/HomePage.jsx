@@ -73,7 +73,7 @@ function HomePage({ analysisData, setAnalysisData }) {
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = `aegisgraph-analysis-${analysisData.analysis_id}.json`;
+                link.download = `fraud-netra-analysis-${analysisData.analysis_id}.json`;
                 link.click();
               }}
               className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition"

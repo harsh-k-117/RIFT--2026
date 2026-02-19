@@ -19,5 +19,5 @@ app.get('/health', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 AegisGraph Backend running on port ${PORT}`);
+  console.log(`�️ Fraud Netra Backend running on port ${PORT}`);
 });

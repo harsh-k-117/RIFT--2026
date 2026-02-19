@@ -8,7 +8,7 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
         <div className="container mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold">🛡️ AegisGraph</h1>
+          <h1 className="text-3xl font-bold">👁️ Fraud Netra</h1>
           <p className="text-blue-100 mt-1">Financial Crime Detection Engine</p>
         </div>
       </header>
@@ -19,7 +19,7 @@ function App() {
 
       <footer className="bg-gray-800 text-gray-300 py-6 mt-12">
         <div className="container mx-auto px-4 text-center">
-          <p>RIFT 2026 Hackathon - Money Muling Detection Engine</p>
+          <p>👁️ Fraud Netra | RIFT 2026 Hackathon - Money Muling Detection Engine</p>
         </div>
       </footer>
     </div>
