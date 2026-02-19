@@ -527,64 +527,65 @@ function GraphVisualization({ data, graphData }) {
   }
 
   return (
-    <div className="relative flex gap-4">
+    <div className="relative flex gap-6 w-full">
       {/* Main Graph Area */}
-      <div className="flex-1">
-        {/* Filters and Controls */}
-        <div className="mb-4 p-4 bg-gradient-to-r from-gray-800 to-gray-900 rounded-lg border border-gray-700 shadow-xl">
-          <div className="flex justify-between items-start mb-3">
+      <div className="flex-1 min-w-0">
+        {/* Premium Controls Panel */}
+        <div className="mb-6 glass-card p-6 rounded-xl border border-white/10 shadow-2xl">
+          <div className="flex justify-between items-start mb-4">
             <div>
-              <h4 className="font-semibold text-sm mb-2 text-gray-200">🎨 Threat Level Legend:</h4>
-              <div className="flex flex-wrap gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-red-500 border-2 border-gray-700 shadow-lg"></div>
-                  <span className="font-medium text-gray-300">High Risk (≥60)</span>
+              <h4 className="font-semibold text-sm mb-3 text-white/90" style={{fontFamily: 'Space Grotesk, sans-serif'}}>⚡ Threat Level Classification</h4>
+              <div className="flex flex-wrap gap-3 text-sm">
+                <div className="glass px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition">
+                  <div className="w-3 h-3 rounded-full bg-red-500 status-pulse"></div>
+                  <span className="font-medium text-gray-300 text-xs">Critical ≥60</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-orange-500 border-2 border-gray-700 shadow-lg"></div>
-                  <span className="font-medium text-gray-300">Medium Risk (30-59)</span>
+                <div className="glass px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition">
+                  <div className="w-3 h-3 rounded-full bg-orange-500 status-pulse"></div>
+                  <span className="font-medium text-gray-300 text-xs">High 30-59</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-yellow-300 border-2 border-gray-700 shadow-lg"></div>
-                  <span className="font-medium text-gray-300">Low Risk (1-29)</span>
+                <div className="glass px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition">
+                  <div className="w-3 h-3 rounded-full bg-yellow-300"></div>
+                  <span className="font-medium text-gray-300 text-xs">Medium 1-29</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-blue-500 border-2 border-gray-700 shadow-lg"></div>
-                  <span className="font-medium text-gray-300">Normal</span>
+                <div className="glass px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition">
+                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <span className="font-medium text-gray-300 text-xs">Normal</span>
                 </div>
               </div>
             </div>
-            <div className="text-right bg-gray-800 px-4 py-2 rounded-lg border border-gray-700">
-              <div className="text-sm font-semibold text-gray-200">
-                {nodes.length} Accounts | {links.length} Transactions
+            <div className="glass-strong px-5 py-3 rounded-xl border border-white/10">
+              <div className="text-sm font-bold text-white" style={{fontFamily: 'Space Grotesk, sans-serif'}}>
+                {nodes.length} <span className="text-xs text-gray-400 font-normal">Accounts</span> • {links.length} <span className="text-xs text-gray-400 font-normal">Transactions</span>
               </div>
-              <div className="text-xs text-red-400 mt-1 font-medium">
-                {nodes.filter(n => n.suspicious).length} Suspicious
+              <div className="text-xs text-red-400 mt-1.5 font-semibold flex items-center gap-1">
+                <div className="w-1.5 h-1.5 bg-red-500 rounded-full status-pulse"></div>
+                {nodes.filter(n => n.suspicious).length} Flagged
               </div>
             </div>
           </div>
           
           {/* Filter Controls */}
-          <div className="mt-3 pt-3 border-t border-gray-700 flex gap-4 items-center flex-wrap">
-            <div className="flex items-center gap-2">
+          <div className="mt-4 pt-4 border-t border-white/10 flex gap-3 items-center flex-wrap">
+            <div className="glass px-4 py-2 rounded-lg flex items-center gap-2 cursor-pointer hover:bg-white/5 transition">
               <input
                 type="checkbox"
                 id="showSuspicious"
                 checked={showOnlySuspicious}
                 onChange={(e) => setShowOnlySuspicious(e.target.checked)}
-                className="w-4 h-4 text-red-600 rounded bg-gray-700 border-gray-600"
+                className="w-4 h-4 text-red-600 rounded cursor-pointer"
               />
-              <label htmlFor="showSuspicious" className="text-sm font-medium text-gray-300">
-                🔍 Show Only Suspicious
+              <label htmlFor="showSuspicious" className="text-xs font-semibold text-gray-300 cursor-pointer">
+                🎯 Suspicious Only
               </label>
             </div>
             
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-300">Filter by Risk:</label>
+            <div className="glass px-4 py-2 rounded-lg flex items-center gap-2">
+              <label className="text-xs font-semibold text-gray-400">Risk Level:</label>
               <select
                 value={riskFilter}
                 onChange={(e) => setRiskFilter(e.target.value)}
-                className="text-sm border border-gray-600 rounded px-2 py-1 bg-gray-700 text-gray-200"
+                className="text-xs font-semibold glass border-0 rounded px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
               >
                 <option value="all">All Levels</option>
                 <option value="high">High Risk Only</option>
@@ -600,50 +601,56 @@ function GraphVisualization({ data, graphData }) {
                   setShowOnlySuspicious(false);
                   setRiskFilter('all');
                 }}
-                className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1 rounded transition border border-gray-600"
+                className="text-xs glass hover:bg-white/10 text-gray-300 px-4 py-2 rounded-lg transition font-semibold"
               >
-                Clear Filters
+                ✕ Clear
               </button>
             )}
             
             <button
               onClick={fitToScreen}
-              className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition font-medium ml-auto shadow-lg"
+              className="text-xs bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-4 py-2 rounded-lg transition font-semibold ml-auto shadow-lg hover:shadow-blue-500/50"
             >
-              📐 Fit to Screen
+              🎯 Fit View
             </button>
           </div>
           
-          <div className="mt-3 pt-3 border-t border-gray-700">
-            <p className="text-xs text-gray-400">
-              💡 <strong className="text-gray-300">Investigation Tips:</strong> Click nodes to focus. Hover to highlight connections. Zoom in to see labels.
-            </p>
+          <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="glass px-4 py-3 rounded-lg">
+              <p className="text-xs text-gray-400">
+                💡 <strong className="text-blue-400">Pro Tip:</strong> Click nodes for focus mode • Hover to reveal connections • Zoom for labels
+              </p>
+            </div>
           </div>
           
           {/* Search Section */}
-          <div className="mt-3 pt-3 border-t border-gray-700">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-300">🔍 Search Account:</label>
+          <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="glass px-3 py-2 rounded-lg">
+                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
               <input
                 type="text"
                 value={searchAccountId}
                 onChange={(e) => setSearchAccountId(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="Enter account ID..."
-                className="flex-1 text-sm border border-gray-600 rounded px-3 py-1.5 bg-gray-700 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Search account ID..."
+                className="flex-1 text-sm glass border-0 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
                 onClick={handleSearch}
-                className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded transition font-medium shadow-lg"
+                className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-5 py-2.5 rounded-lg transition font-semibold shadow-lg hover:shadow-blue-500/50"
               >
                 Find
               </button>
             </div>
             {searchMessage && (
-              <div className={`mt-2 text-sm px-3 py-1.5 rounded ${
-                searchMessage.includes('✓') ? 'bg-green-100 text-green-700' :
-                searchMessage.includes('❌') ? 'bg-red-100 text-red-700' :
-                'bg-yellow-100 text-yellow-700'
+              <div className={`mt-3 text-xs px-4 py-2 rounded-lg glass-card font-semibold ${
+                searchMessage.includes('✓') ? 'text-green-400 border-green-500/20' :
+                searchMessage.includes('❌') ? 'text-red-400 border-red-500/20' :
+                'text-yellow-400 border-yellow-500/20'
               }`}>
                 {searchMessage}
               </div>
@@ -651,12 +658,18 @@ function GraphVisualization({ data, graphData }) {
           </div>
         </div>
 
-        {/* Graph */}
-        <div className="border-2 border-gray-700 rounded-lg overflow-hidden shadow-2xl" 
+        {/* Premium Graph Container */}
+        <div className="glass-card border-white/10 rounded-2xl overflow-hidden shadow-2xl relative w-full" 
              style={{ 
-               background: 'linear-gradient(135deg, #1a1f2e 0%, #2d3748 50%, #1a202c 100%)',
-               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4)'
+               background: 'linear-gradient(135deg, rgba(26, 31, 46, 0.9) 0%, rgba(45, 55, 72, 0.8) 50%, rgba(26, 32, 44, 0.9) 100%)',
+               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+               minHeight: '600px'
              }}>
+          {/* Subtle animated gradient overlay */}
+          <div className="absolute inset-0 pointer-events-none" style={{
+            background: 'radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.05) 0%, transparent 70%)',
+            animation: 'pulse-glow 4s ease-in-out infinite'
+          }}></div>
           <CytoscapeComponent
             elements={cytoscapeElements}
             style={{ 
@@ -671,9 +684,11 @@ function GraphVisualization({ data, graphData }) {
           />
         </div>
         
-        {/* Controls Info */}
-        <div className="mt-2 text-xs text-gray-500 text-center bg-gray-800 py-2 rounded-lg border border-gray-700">
-          🖱️ Drag to pan | Scroll to zoom | Click nodes to investigate | Hover for details
+        {/* Premium Controls Info */}
+        <div className="mt-4 text-xs text-center glass px-6 py-3 rounded-xl border border-white/10 shadow-lg">
+          <span className="text-gray-400">
+            🕹️ <strong className="text-blue-400">Navigation:</strong> Drag to pan • Scroll to zoom • Click to investigate • Hover for intel
+          </span>
         </div>
       </div>
 
