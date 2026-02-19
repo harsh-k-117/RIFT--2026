@@ -1,19 +1,88 @@
 import React, { useRef, useEffect, useState } from 'react';
-import ForceGraph2D from 'react-force-graph-2d';
-import { transformGraphData, getNodeColor, getNodeSize } from '../utils/graphHelpers';
+import CytoscapeComponent from 'react-cytoscapejs';
+import { getNodeColor } from '../utils/graphHelpers';
 
 function GraphVisualization({ data, graphData }) {
-  const graphRef = useRef();
+  const cyRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-  const [highlightNodes, setHighlightNodes] = useState(new Set());
-  const [highlightLinks, setHighlightLinks] = useState(new Set());
-  const [hoverNode, setHoverNode] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [showOnlySuspicious, setShowOnlySuspicious] = useState(false);
-  const [riskFilter, setRiskFilter] = useState('all'); // 'all', 'high', 'medium', 'low', 'normal'
+  const [riskFilter, setRiskFilter] = useState('all');
+  const [searchAccountId, setSearchAccountId] = useState('');
+  const [searchMessage, setSearchMessage] = useState('');
+  const [cytoscapeElements, setCytoscapeElements] = useState([]);
 
-  // Transform graph data
-  const graph = transformGraphData(graphData);
+  // Transform data to Cytoscape format
+  const transformToCytoscapeFormat = (nodes, links) => {
+    const elements = [];
+    
+    // Add nodes
+    nodes.forEach(node => {
+      elements.push({
+        data: {
+          id: node.id,
+          label: node.id,
+          suspicious: node.suspicious || false,
+          suspicionScore: node.suspicionScore || 0,
+          patterns: node.patterns || [],
+          ringId: node.ringId || null,
+          totalTransactions: node.totalTransactions || 0,
+          inDegree: node.inDegree || 0,
+          outDegree: node.outDegree || 0,
+          degree: (node.inDegree || 0) + (node.outDegree || 0)
+        }
+      });
+    });
+    
+    // Add edges
+    links.forEach((link, idx) => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+      
+      elements.push({
+        data: {
+          id: `edge-${idx}`,
+          source: sourceId,
+          target: targetId
+        }
+      });
+    });
+    
+    return elements;
+  };
+
+  // Filter nodes based on settings
+  const getFilteredData = () => {
+    if (!graphData || !graphData.nodes) return { nodes: [], links: [] };
+    
+    const filteredNodes = graphData.nodes.filter(node => {
+      if (showOnlySuspicious && !node.suspicious) return false;
+      
+      const score = node.suspicionScore || 0;
+      if (riskFilter === 'high' && score < 60) return false;
+      if (riskFilter === 'medium' && (score < 30 || score >= 60)) return false;
+      if (riskFilter === 'low' && (score < 1 || score >= 30)) return false;
+      if (riskFilter === 'normal' && score > 0) return false;
+      
+      return true;
+    });
+    
+    const nodeIds = new Set(filteredNodes.map(n => n.id));
+    const filteredLinks = graphData.links.filter(link => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+      return nodeIds.has(sourceId) && nodeIds.has(targetId);
+    });
+    
+    return { nodes: filteredNodes, links: filteredLinks };
+  };
+
+  // Update Cytoscape elements when data or filters change
+  useEffect(() => {
+    const { nodes, links } = getFilteredData();
+    const elements = transformToCytoscapeFormat(nodes, links);
+    setCytoscapeElements(elements);
+  }, [graphData, showOnlySuspicious, riskFilter]);
 
   // Handle window resize
   useEffect(() => {
@@ -30,164 +99,213 @@ function GraphVisualization({ data, graphData }) {
     return () => window.removeEventListener('resize', updateDimensions);
   }, [selectedNode]);
 
-  // Fit graph to view on load
+  // Initialize Cytoscape event handlers
   useEffect(() => {
-    if (graphRef.current && graph.nodes.length > 0) {
-      setTimeout(() => {
-        graphRef.current.zoomToFit(400, 80);
-      }, 200);
-    }
-  }, [graph]);
-
-  // Filter nodes based on settings
-  const filteredGraph = {
-    nodes: graph.nodes.filter(node => {
-      // Filter by suspicious toggle
-      if (showOnlySuspicious && !node.suspicious) return false;
+    if (!cyRef.current) return;
+    
+    const cy = cyRef.current;
+    
+    // Node click handler
+    cy.on('tap', 'node', (evt) => {
+      const node = evt.target;
+      const nodeData = {
+        id: node.data('id'),
+        suspicious: node.data('suspicious'),
+        suspicionScore: node.data('suspicionScore'),
+        patterns: node.data('patterns'),
+        ringId: node.data('ringId'),
+        totalTransactions: node.data('totalTransactions'),
+        inDegree: node.data('inDegree'),
+        outDegree: node.data('outDegree')
+      };
       
-      // Filter by risk level
-      if (riskFilter === 'high' && node.suspicionScore < 60) return false;
-      if (riskFilter === 'medium' && (node.suspicionScore < 30 || node.suspicionScore >= 60)) return false;
-      if (riskFilter === 'low' && (node.suspicionScore < 1 || node.suspicionScore >= 30)) return false;
-      if (riskFilter === 'normal' && node.suspicionScore > 0) return false;
+      setSelectedNode(nodeData);
       
-      return true;
-    }),
-    links: graph.links.filter(link => {
-      // Only show links where both nodes are in filtered set
-      const nodeIds = new Set(graph.nodes.filter(node => {
-        if (showOnlySuspicious && !node.suspicious) return false;
-        if (riskFilter === 'high' && node.suspicionScore < 60) return false;
-        if (riskFilter === 'medium' && (node.suspicionScore < 30 || node.suspicionScore >= 60)) return false;
-        if (riskFilter === 'low' && (node.suspicionScore < 1 || node.suspicionScore >= 30)) return false;
-        if (riskFilter === 'normal' && node.suspicionScore > 0) return false;
-        return true;
-      }).map(n => n.id));
+      // Highlight connected nodes
+      const neighbors = node.neighborhood();
+      cy.elements().removeClass('highlighted faded');
+      node.addClass('highlighted');
+      neighbors.addClass('highlighted');
+      cy.elements().not(neighbors.union(node)).addClass('faded');
       
-      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-      return nodeIds.has(sourceId) && nodeIds.has(targetId);
-    })
-  };
-
-  const handleNodeClick = (node) => {
-    setSelectedNode(node);
-  };
-
-  const handleNodeHover = (node) => {
-    setHoverNode(node);
-    if (node) {
-      const neighbors = new Set();
-      const links = new Set();
-      
-      filteredGraph.links.forEach(link => {
-        if (link.source.id === node.id || link.source === node.id) {
-          neighbors.add(link.target.id || link.target);
-          links.add(link);
-        }
-        if (link.target.id === node.id || link.target === node.id) {
-          neighbors.add(link.source.id || link.source);
-          links.add(link);
-        }
+      // Center on node
+      cy.animate({
+        center: { eles: node },
+        zoom: 2,
+        duration: 500
       });
-      
-      setHighlightNodes(neighbors);
-      setHighlightLinks(links);
-    } else {
-      setHighlightNodes(new Set());
-      setHighlightLinks(new Set());
+    });
+    
+    // Click on background to deselect
+    cy.on('tap', (evt) => {
+      if (evt.target === cy) {
+        setSelectedNode(null);
+        cy.elements().removeClass('highlighted faded');
+      }
+    });
+    
+    return () => {
+      cy.removeAllListeners();
+    };
+  }, [cyRef.current]);
+
+  // Fit graph to view
+  const fitToScreen = () => {
+    if (cyRef.current) {
+      cyRef.current.fit(null, 50);
     }
   };
 
-  const paintNode = (node, ctx, globalScale) => {
-    // Draw node circle
-    const nodeColor = getNodeColor(node);
-    const baseSize = node.suspicious ? 8 : 5;
-    const size = baseSize + Math.sqrt(node.totalTransactions || 1);
-    
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, size, 0, 2 * Math.PI);
-    ctx.fillStyle = nodeColor;
-    ctx.fill();
-    
-    // Add white border for all nodes
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2 / globalScale;
-    ctx.stroke();
-    
-    // Add highlight border for hovered/connected/selected nodes
-    if (hoverNode === node || highlightNodes.has(node.id) || selectedNode?.id === node.id) {
-      ctx.strokeStyle = selectedNode?.id === node.id ? '#FBBF24' : '#000';
-      ctx.lineWidth = selectedNode?.id === node.id ? 4 / globalScale : 3 / globalScale;
-      ctx.stroke();
+  // Handle search
+  const handleSearch = () => {
+    if (!searchAccountId.trim()) {
+      setSearchMessage('⚠️ Please enter an account ID');
+      return;
     }
     
-    // No labels - clean node visualization only
-  };
-
-  const paintLink = (link, ctx, globalScale) => {
-    const isHighlighted = highlightLinks.has(link);
+    if (!cyRef.current) return;
     
-    // Make edges more visible by default
-    ctx.strokeStyle = isHighlighted ? '#1F2937' : '#9CA3AF';
-    ctx.lineWidth = isHighlighted ? 3 / globalScale : 1.2 / globalScale;
+    const cy = cyRef.current;
+    const node = cy.getElementById(searchAccountId.trim());
     
-    ctx.beginPath();
-    ctx.moveTo(link.source.x, link.source.y);
-    ctx.lineTo(link.target.x, link.target.y);
-    ctx.stroke();
-    
-    // Draw arrow for highlighted links
-    if (isHighlighted) {
-      const arrowLength = 10 / globalScale;
-      const arrowWidth = 5 / globalScale;
-      
-      const dx = link.target.x - link.source.x;
-      const dy = link.target.y - link.source.y;
-      const angle = Math.atan2(dy, dx);
-      
-      const targetNode = typeof link.target === 'object' ? link.target : filteredGraph.nodes.find(n => n.id === link.target);
-      const nodeRadius = targetNode ? (targetNode.suspicious ? 8 : 5) + Math.sqrt(targetNode.totalTransactions || 1) : 5;
-      const arrowX = link.target.x - Math.cos(angle) * (nodeRadius + 2);
-      const arrowY = link.target.y - Math.sin(angle) * (nodeRadius + 2);
-      
-      ctx.save();
-      ctx.translate(arrowX, arrowY);
-      ctx.rotate(angle);
-      
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-arrowLength, arrowWidth);
-      ctx.lineTo(-arrowLength, -arrowWidth);
-      ctx.closePath();
-      
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.fill();
-      ctx.restore();
-    }
-  };
-
-  const getNodeTooltip = (node) => {
-    if (!node.suspicious) {
-      return `<div style="padding: 8px;">
-        <strong>${node.id}</strong><br/>
-        Transactions: ${node.totalTransactions || 0}<br/>
-        Status: Normal ✓
-      </div>`;
+    if (node.length === 0) {
+      setSearchMessage(`❌ Account "${searchAccountId}" not found in dataset`);
+      return;
     }
     
-    return `<div style="padding: 10px; background: #fff; border-radius: 4px; border: 2px solid ${getNodeColor(node)};">
-      <strong style="color: ${getNodeColor(node)}; font-size: 14px;">${node.id}</strong><br/>
-      <strong style="color: #DC2626;">⚠️ Suspicion Score: ${node.suspicionScore}</strong><br/>
-      ${node.ringId ? `<strong style="color: #F97316;">🔗 Ring: ${node.ringId}</strong><br/>` : ''}
-      <span style="color: #6B7280;">Patterns: ${node.patterns.join(', ')}</span><br/>
-      <span style="color: #6B7280;">Transactions: ${node.totalTransactions || 0}</span><br/>
-      <span style="color: #6B7280;">In: ${node.inDegree || 0} | Out: ${node.outDegree || 0}</span><br/>
-      <span style="font-size: 11px; color: #9CA3AF;">Click to view details →</span>
-    </div>`;
+    // Check if visible (not filtered out)
+    if (node.style('display') === 'none') {
+      setSearchMessage(`⚠️ Account "${searchAccountId}" exists but is filtered out. Clear filters to view.`);
+      return;
+    }
+    
+    // Focus on node
+    const nodeData = {
+      id: node.data('id'),
+      suspicious: node.data('suspicious'),
+      suspicionScore: node.data('suspicionScore'),
+      patterns: node.data('patterns'),
+      ringId: node.data('ringId'),
+      totalTransactions: node.data('totalTransactions'),
+      inDegree: node.data('inDegree'),
+      outDegree: node.data('outDegree')
+    };
+    
+    setSelectedNode(nodeData);
+    setSearchMessage(`✓ Focused on ${searchAccountId.trim()}`);
+    
+    // Highlight and center
+    const neighbors = node.neighborhood();
+    cy.elements().removeClass('highlighted faded');
+    node.addClass('highlighted');
+    neighbors.addClass('highlighted');
+    cy.elements().not(neighbors.union(node)).addClass('faded');
+    
+    cy.animate({
+      center: { eles: node },
+      zoom: 2,
+      duration: 500
+    });
   };
 
-  if (!graph || graph.nodes.length === 0) {
+  // Cytoscape stylesheet
+  const cytoscapeStylesheet = [
+    {
+      selector: 'node',
+      style: {
+        'background-color': (ele) => {
+          const score = ele.data('suspicionScore') || 0;
+          if (!ele.data('suspicious')) return '#3B82F6'; // blue
+          if (score >= 60) return '#EF4444'; // red
+          if (score >= 30) return '#F97316'; // orange
+          return '#FCD34D'; // yellow
+        },
+        'width': (ele) => {
+          const degree = ele.data('degree') || 0;
+          const baseSize = ele.data('suspicious') ? 25 : 20;
+          return Math.min(baseSize + Math.sqrt(degree) * 3, 60);
+        },
+        'height': (ele) => {
+          const degree = ele.data('degree') || 0;
+          const baseSize = ele.data('suspicious') ? 25 : 20;
+          return Math.min(baseSize + Math.sqrt(degree) * 3, 60);
+        },
+        'label': 'data(label)',
+        'font-size': '10px',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'color': '#1F2937',
+        'text-outline-width': 2,
+        'text-outline-color': '#ffffff',
+        'border-width': 2,
+        'border-color': '#ffffff',
+        'overlay-opacity': 0
+      }
+    },
+    {
+      selector: 'node.highlighted',
+      style: {
+        'border-width': 4,
+        'border-color': '#FBBF24',
+        'z-index': 10
+      }
+    },
+    {
+      selector: 'node.faded',
+      style: {
+        'opacity': 0.3
+      }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'width': 2,
+        'line-color': '#9CA3AF',
+        'target-arrow-color': '#9CA3AF',
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'arrow-scale': 1.2,
+        'opacity': 0.7
+      }
+    },
+    {
+      selector: 'edge.highlighted',
+      style: {
+        'width': 3,
+        'line-color': '#1F2937',
+        'target-arrow-color': '#1F2937',
+        'opacity': 1,
+        'z-index': 9
+      }
+    },
+    {
+      selector: 'edge.faded',
+      style: {
+        'opacity': 0.1
+      }
+    }
+  ];
+
+  // Cytoscape layout configuration
+  const layoutConfig = {
+    name: 'cose',
+    animate: false,
+    fit: true,
+    padding: 50,
+    nodeRepulsion: 400000,
+    idealEdgeLength: 100,
+    edgeElasticity: 100,
+    nestingFactor: 1.2,
+    gravity: 80,
+    numIter: 1000,
+    initialTemp: 200,
+    coolingFactor: 0.95,
+    minTemp: 1.0
+  };
+
+  const { nodes, links } = getFilteredData();
+
+  if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
     return (
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center bg-gray-50">
         <div className="text-gray-500">
@@ -245,10 +363,10 @@ function GraphVisualization({ data, graphData }) {
             </div>
             <div className="text-right">
               <div className="text-sm font-semibold text-gray-700">
-                {filteredGraph.nodes.length} Accounts | {filteredGraph.links.length} Transactions
+                {nodes.length} Accounts | {links.length} Transactions
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                {filteredGraph.nodes.filter(n => n.suspicious).length} Suspicious
+                {nodes.filter(n => n.suspicious).length} Suspicious
               </div>
             </div>
           </div>
@@ -294,37 +412,61 @@ function GraphVisualization({ data, graphData }) {
                 Clear Filters
               </button>
             )}
+            
+            <button
+              onClick={fitToScreen}
+              className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition font-medium ml-auto"
+            >
+              📐 Fit to Screen
+            </button>
           </div>
           
           <div className="mt-3 pt-3 border-t border-gray-200">
             <p className="text-xs text-gray-600">
-              💡 <strong>Tip:</strong> Click nodes to view details in side panel. Hover to highlight connections. Selected nodes have a gold border.
+              💡 <strong>Tip:</strong> Click nodes to view details in side panel. Hover to see tooltips. Selected nodes have a gold border.
             </p>
+          </div>
+          
+          {/* Search Section */}
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">🔍 Search Account:</label>
+              <input
+                type="text"
+                value={searchAccountId}
+                onChange={(e) => setSearchAccountId(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                placeholder="Enter account ID..."
+                className="flex-1 text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleSearch}
+                className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded transition font-medium"
+              >
+                Find
+              </button>
+            </div>
+            {searchMessage && (
+              <div className={`mt-2 text-sm px-3 py-1.5 rounded ${
+                searchMessage.includes('✓') ? 'bg-green-100 text-green-700' :
+                searchMessage.includes('❌') ? 'bg-red-100 text-red-700' :
+                'bg-yellow-100 text-yellow-700'
+              }`}>
+                {searchMessage}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Graph */}
         <div className="border-2 border-gray-300 rounded-lg bg-gradient-to-br from-gray-50 to-white overflow-hidden shadow-lg">
-          <ForceGraph2D
-            ref={graphRef}
-            graphData={filteredGraph}
-            width={dimensions.width}
-            height={dimensions.height}
-            nodeCanvasObject={paintNode}
-            linkCanvasObject={paintLink}
-            onNodeHover={handleNodeHover}
-            onNodeClick={handleNodeClick}
-            nodeLabel={getNodeTooltip}
-            linkDirectionalArrowLength={0}
-            linkDirectionalArrowRelPos={1}
-            cooldownTicks={100}
-            onEngineStop={() => graphRef.current?.zoomToFit(400, 80)}
-            d3AlphaDecay={0.02}
-            d3VelocityDecay={0.3}
-            enableNodeDrag={true}
-            enableZoomPanInteraction={true}
-            minZoom={0.5}
-            maxZoom={8}
+          <CytoscapeComponent
+            elements={cytoscapeElements}
+            style={{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }}
+            stylesheet={cytoscapeStylesheet}
+            layout={layoutConfig}
+            cy={(cy) => { cyRef.current = cy; }}
+            wheelSensitivity={0.2}
           />
         </div>
         
