@@ -189,25 +189,27 @@ function GraphVisualization({ data, graphData }) {
 
   if (!graph || graph.nodes.length === 0) {
     return (
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center bg-gray-50">
-        <div className="text-gray-500">
-          <svg
-            className="mx-auto h-16 w-16 text-gray-400 mb-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-            />
-          </svg>
-          <h3 className="text-lg font-semibold text-gray-700 mb-2">
+      <div className="border-2 border-dashed border-gray-600 rounded-xl p-12 text-center bg-gray-800/30">
+        <div className="text-gray-400">
+          <div className="mx-auto bg-blue-500/20 w-20 h-20 rounded-full flex items-center justify-center mb-4 border border-blue-500/30">
+            <svg
+              className="h-10 w-10 text-blue-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
+            </svg>
+          </div>
+          <h3 className="text-xl font-bold text-gray-200 mb-2">
             No Graph Data
           </h3>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-400">
             Upload a CSV file to visualize the transaction network
           </p>
         </div>
@@ -220,65 +222,75 @@ function GraphVisualization({ data, graphData }) {
       {/* Main Graph Area */}
       <div className="flex-1">
         {/* Filters and Controls */}
-        <div className="mb-4 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200">
+        <div className="mb-4 p-4 bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl border border-gray-700 shadow-lg">
           <div className="flex justify-between items-start mb-3">
             <div>
-              <h4 className="font-semibold text-sm mb-2">🎨 Color Legend:</h4>
-              <div className="flex flex-wrap gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-red-500 border-2 border-white shadow"></div>
-                  <span className="font-medium">High Risk (≥60)</span>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="bg-cyan-500/20 p-1.5 rounded border border-cyan-500/30">
+                  <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                  </svg>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-orange-500 border-2 border-white shadow"></div>
-                  <span className="font-medium">Medium Risk (30-59)</span>
+                <h4 className="font-bold text-sm text-gray-200">Risk Level Legend</h4>
+              </div>
+              <div className="flex flex-wrap gap-3 text-sm">
+                <div className="flex items-center gap-2 bg-gray-700/50 px-3 py-1.5 rounded-lg border border-gray-600">
+                  <div className="w-4 h-4 rounded-full bg-red-500 border border-white shadow-lg"></div>
+                  <span className="font-semibold text-gray-200">Critical (≥60)</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-yellow-300 border-2 border-white shadow"></div>
-                  <span className="font-medium">Low Risk (1-29)</span>
+                <div className="flex items-center gap-2 bg-gray-700/50 px-3 py-1.5 rounded-lg border border-gray-600">
+                  <div className="w-4 h-4 rounded-full bg-orange-500 border border-white shadow-lg"></div>
+                  <span className="font-semibold text-gray-200">High (30-59)</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow"></div>
-                  <span className="font-medium">Normal</span>
+                <div className="flex items-center gap-2 bg-gray-700/50 px-3 py-1.5 rounded-lg border border-gray-600">
+                  <div className="w-4 h-4 rounded-full bg-yellow-300 border border-white shadow-lg"></div>
+                  <span className="font-semibold text-gray-200">Medium (1-29)</span>
+                </div>
+                <div className="flex items-center gap-2 bg-gray-700/50 px-3 py-1.5 rounded-lg border border-gray-600">
+                  <div className="w-4 h-4 rounded-full bg-blue-500 border border-white shadow-lg"></div>
+                  <span className="font-semibold text-gray-200">Normal</span>
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-sm font-semibold text-gray-700">
-                {filteredGraph.nodes.length} Accounts | {filteredGraph.links.length} Transactions
+            <div className="text-right bg-gray-700/50 px-4 py-2 rounded-lg border border-gray-600">
+              <div className="text-lg font-bold text-cyan-400">
+                {filteredGraph.nodes.length} <span className="text-xs text-gray-400">accounts</span>
               </div>
-              <div className="text-xs text-gray-500 mt-1">
-                {filteredGraph.nodes.filter(n => n.suspicious).length} Suspicious
+              <div className="text-sm font-semibold text-gray-400">
+                {filteredGraph.links.length} transactions
+              </div>
+              <div className="text-xs text-red-400 mt-1 font-semibold">
+                {filteredGraph.nodes.filter(n => n.suspicious).length} suspicious
               </div>
             </div>
           </div>
           
           {/* Filter Controls */}
-          <div className="mt-3 pt-3 border-t border-gray-200 flex gap-4 items-center flex-wrap">
-            <div className="flex items-center gap-2">
+          <div className="mt-3 pt-3 border-t border-gray-700 flex gap-3 items-center flex-wrap">
+            <div className="flex items-center gap-2 bg-gray-700/50 px-3 py-2 rounded-lg border border-gray-600">
               <input
                 type="checkbox"
                 id="showSuspicious"
                 checked={showOnlySuspicious}
                 onChange={(e) => setShowOnlySuspicious(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded"
+                className="w-4 h-4 text-cyan-600 bg-gray-700 border-gray-500 rounded focus:ring-cyan-500"
               />
-              <label htmlFor="showSuspicious" className="text-sm font-medium text-gray-700">
+              <label htmlFor="showSuspicious" className="text-sm font-semibold text-gray-200 cursor-pointer">
                 Show Only Suspicious
               </label>
             </div>
             
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">Filter by Risk:</label>
+            <div className="flex items-center gap-2 bg-gray-700/50 px-3 py-2 rounded-lg border border-gray-600">
+              <label className="text-sm font-semibold text-gray-200">Risk Filter:</label>
               <select
                 value={riskFilter}
                 onChange={(e) => setRiskFilter(e.target.value)}
-                className="text-sm border border-gray-300 rounded px-2 py-1"
+                className="text-sm bg-gray-800 border border-gray-600 text-gray-200 rounded px-3 py-1 focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
               >
                 <option value="all">All Levels</option>
-                <option value="high">High Risk Only</option>
-                <option value="medium">Medium Risk Only</option>
-                <option value="low">Low Risk Only</option>
+                <option value="high">Critical Only</option>
+                <option value="medium">High Only</option>
+                <option value="low">Medium Only</option>
                 <option value="normal">Normal Only</option>
               </select>
             </div>
@@ -289,22 +301,25 @@ function GraphVisualization({ data, graphData }) {
                   setShowOnlySuspicious(false);
                   setRiskFilter('all');
                 }}
-                className="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded transition"
+                className="text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg transition font-semibold"
               >
                 Clear Filters
               </button>
             )}
           </div>
           
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <p className="text-xs text-gray-600">
-              💡 <strong>Tip:</strong> Click nodes to view details in side panel. Hover to highlight connections. Selected nodes have a gold border.
+          <div className="mt-3 pt-3 border-t border-gray-700 flex items-center gap-2">
+            <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-xs text-gray-400">
+              <strong className="text-cyan-400">Tip:</strong> Click nodes to view details. Hover to highlight connections. Gold border = selected node.
             </p>
           </div>
         </div>
 
         {/* Graph */}
-        <div className="border-2 border-gray-300 rounded-lg bg-gradient-to-br from-gray-50 to-white overflow-hidden shadow-lg">
+        <div className="border-2 border-gray-700 rounded-xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-hidden shadow-2xl">
           <ForceGraph2D
             ref={graphRef}
             graphData={filteredGraph}
@@ -329,59 +344,81 @@ function GraphVisualization({ data, graphData }) {
         </div>
         
         {/* Controls Info */}
-        <div className="mt-2 text-xs text-gray-500 text-center">
-          🖱️ Drag to pan | Scroll to zoom | Click nodes to select | Drag nodes to reposition
+        <div className="mt-3 flex items-center justify-center gap-6 text-xs text-gray-400 bg-gray-800/50 px-4 py-2 rounded-lg border border-gray-700">
+          <div className="flex items-center gap-1">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" /></svg>
+            <span>Drag to pan</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <span>Scroll to zoom</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" /></svg>
+            <span>Click nodes for details</span>
+          </div>
         </div>
       </div>
 
       {/* Side Panel */}
       {selectedNode && (
-        <div className="w-80 bg-white border-2 border-gray-300 rounded-lg shadow-xl p-4 overflow-y-auto max-h-[750px]">
-          <div className="flex justify-between items-start mb-4">
-            <h3 className="text-lg font-bold text-gray-800">Node Details</h3>
+        <div className="w-80 bg-gradient-to-b from-gray-800 to-gray-900 border-2 border-gray-700 rounded-xl shadow-2xl p-4 overflow-y-auto max-h-[750px]">
+          <div className="flex justify-between items-start mb-4 pb-3 border-b border-gray-700">
+            <div className="flex items-center gap-2">
+              <div className="bg-cyan-500/20 p-1.5 rounded border border-cyan-500/30">
+                <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-gray-200">Account Details</h3>
+            </div>
             <button
               onClick={() => setSelectedNode(null)}
-              className="text-gray-500 hover:text-gray-700 transition"
+              className="text-gray-400 hover:text-gray-200 transition bg-gray-700 hover:bg-gray-600 rounded-full w-6 h-6 flex items-center justify-center"
             >
-              ✕
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
 
           <div className="space-y-3">
             {/* Account ID */}
-            <div className="bg-gray-50 p-3 rounded border border-gray-200">
-              <div className="text-xs text-gray-500 uppercase font-semibold mb-1">Account ID</div>
-              <div className="text-lg font-bold text-gray-800">{selectedNode.id}</div>
+            <div className="bg-gray-700/50 p-3 rounded-lg border border-gray-600">
+              <div className="text-xs text-gray-400 uppercase font-semibold mb-1">Account ID</div>
+              <div className="text-lg font-bold text-cyan-400 font-mono">{selectedNode.id}</div>
             </div>
 
             {/* Status Badge */}
-            <div className={`p-3 rounded border-2 ${
+            <div className={`p-3 rounded-lg border-2 ${
               selectedNode.suspicious 
-                ? 'bg-red-50 border-red-300' 
-                : 'bg-green-50 border-green-300'
+                ? 'bg-gradient-to-r from-red-900/50 to-red-800/50 border-red-600' 
+                : 'bg-gradient-to-r from-green-900/50 to-green-800/50 border-green-600'
             }`}>
-              <div className="text-xs text-gray-600 uppercase font-semibold mb-1">Status</div>
-              <div className={`text-lg font-bold ${
-                selectedNode.suspicious ? 'text-red-600' : 'text-green-600'
+              <div className="text-xs text-gray-300 uppercase font-semibold mb-1">Status</div>
+              <div className={`text-lg font-bold flex items-center gap-2 ${
+                selectedNode.suspicious ? 'text-red-400' : 'text-green-400'
               }`}>
-                {selectedNode.suspicious ? '⚠️ SUSPICIOUS' : '✓ NORMAL'}
+                {selectedNode.suspicious ? (
+                  <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>SUSPICIOUS</>
+                ) : (
+                  <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>NORMAL</>
+                )}
               </div>
             </div>
 
             {/* Suspicion Score */}
             {selectedNode.suspicious && (
-              <div className="bg-gradient-to-r from-red-50 to-orange-50 p-3 rounded border border-red-200">
-                <div className="text-xs text-gray-600 uppercase font-semibold mb-1">Suspicion Score</div>
+              <div className="bg-gradient-to-r from-red-900/40 to-orange-900/40 p-3 rounded-lg border border-red-700">
+                <div className="text-xs text-gray-300 uppercase font-semibold mb-1">Suspicion Score</div>
                 <div className="flex items-center gap-2">
-                  <div className="text-3xl font-bold text-red-600">{selectedNode.suspicionScore}</div>
-                  <div className="text-xs text-gray-500">/100</div>
+                  <div className="text-3xl font-bold text-red-400">{selectedNode.suspicionScore}</div>
+                  <div className="text-xs text-gray-400">/100</div>
                 </div>
-                <div className="mt-2 bg-gray-200 rounded-full h-2">
+                <div className="mt-2 bg-gray-800 rounded-full h-2.5">
                   <div
-                    className={`h-2 rounded-full ${
-                      selectedNode.suspicionScore >= 60 ? 'bg-red-500' :
-                      selectedNode.suspicionScore >= 30 ? 'bg-orange-500' :
-                      'bg-yellow-400'
+                    className={`h-2.5 rounded-full ${
+                      selectedNode.suspicionScore >= 60 ? 'bg-gradient-to-r from-red-600 to-red-500' :
+                      selectedNode.suspicionScore >= 30 ? 'bg-gradient-to-r from-orange-600 to-orange-500' :
+                      'bg-gradient-to-r from-yellow-600 to-yellow-500'
                     }`}
                     style={{ width: `${selectedNode.suspicionScore}%` }}
                   ></div>
@@ -391,21 +428,24 @@ function GraphVisualization({ data, graphData }) {
 
             {/* Ring ID */}
             {selectedNode.ringId && (
-              <div className="bg-orange-50 p-3 rounded border border-orange-200">
-                <div className="text-xs text-gray-600 uppercase font-semibold mb-1">🔗 Fraud Ring</div>
-                <div className="text-lg font-bold text-orange-600">{selectedNode.ringId}</div>
+              <div className="bg-gradient-to-r from-orange-900/40 to-red-900/40 p-3 rounded-lg border border-orange-700">
+                <div className="text-xs text-gray-300 uppercase font-semibold mb-1 flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                  Fraud Ring
+                </div>
+                <div className="text-lg font-bold text-orange-400 font-mono">{selectedNode.ringId}</div>
               </div>
             )}
 
             {/* Detected Patterns */}
             {selectedNode.patterns && selectedNode.patterns.length > 0 && (
-              <div className="bg-purple-50 p-3 rounded border border-purple-200">
-                <div className="text-xs text-gray-600 uppercase font-semibold mb-2">Detected Patterns</div>
-                <div className="flex flex-wrap gap-1">
+              <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 p-3 rounded-lg border border-purple-700">
+                <div className="text-xs text-gray-300 uppercase font-semibold mb-2">Detected Patterns</div>
+                <div className="flex flex-wrap gap-1.5">
                   {selectedNode.patterns.map((pattern, idx) => (
                     <span
                       key={idx}
-                      className="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded-full font-medium"
+                      className="text-xs bg-purple-600/50 text-purple-200 px-2.5 py-1 rounded-full font-semibold border border-purple-500/50"
                     >
                       {pattern.replace(/_/g, ' ')}
                     </span>
@@ -415,36 +455,40 @@ function GraphVisualization({ data, graphData }) {
             )}
 
             {/* Transaction Stats */}
-            <div className="bg-blue-50 p-3 rounded border border-blue-200">
-              <div className="text-xs text-gray-600 uppercase font-semibold mb-2">Transaction Stats</div>
+            <div className="bg-gradient-to-r from-blue-900/40 to-cyan-900/40 p-3 rounded-lg border border-blue-700">
+              <div className="text-xs text-gray-300 uppercase font-semibold mb-2">Transaction Stats</div>
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <div className="text-2xl font-bold text-blue-600">{selectedNode.totalTransactions || 0}</div>
-                  <div className="text-xs text-gray-600">Total</div>
+                <div className="bg-gray-800/50 rounded-lg p-2 border border-gray-700">
+                  <div className="text-2xl font-bold text-blue-400">{selectedNode.totalTransactions || 0}</div>
+                  <div className="text-xs text-gray-400">Total</div>
                 </div>
-                <div>
-                  <div className="text-2xl font-bold text-green-600">{selectedNode.inDegree || 0}</div>
-                  <div className="text-xs text-gray-600">Incoming</div>
+                <div className="bg-gray-800/50 rounded-lg p-2 border border-gray-700">
+                  <div className="text-2xl font-bold text-green-400">{selectedNode.inDegree || 0}</div>
+                  <div className="text-xs text-gray-400">Incoming</div>
                 </div>
-                <div>
-                  <div className="text-2xl font-bold text-orange-600">{selectedNode.outDegree || 0}</div>
-                  <div className="text-xs text-gray-600">Outgoing</div>
+                <div className="bg-gray-800/50 rounded-lg p-2 border border-gray-700">
+                  <div className="text-2xl font-bold text-orange-400">{selectedNode.outDegree || 0}</div>
+                  <div className="text-xs text-gray-400">Outgoing</div>
                 </div>
               </div>
             </div>
 
             {/* Color Indicator */}
-            <div className="bg-gray-50 p-3 rounded border border-gray-200">
-              <div className="text-xs text-gray-600 uppercase font-semibold mb-2">Risk Level</div>
+            <div className="bg-gray-700/50 p-3 rounded-lg border border-gray-600">
+              <div className="text-xs text-gray-300 uppercase font-semibold mb-2">Risk Classification</div>
               <div className="flex items-center gap-2">
                 <div
-                  className="w-6 h-6 rounded-full border-2 border-white shadow"
+                  className="w-6 h-6 rounded-full border-2 border-white shadow-lg"
                   style={{ backgroundColor: getNodeColor(selectedNode) }}
                 ></div>
-                <span className="text-sm font-medium text-gray-700">
-                  {selectedNode.suspicionScore >= 60 ? 'High Risk' :
-                   selectedNode.suspicionScore >= 30 ? 'Medium Risk' :
-                   selectedNode.suspicionScore >= 1 ? 'Low Risk' : 'Normal'}
+                <span className={`text-sm font-bold ${
+                  selectedNode.suspicionScore >= 60 ? 'text-red-400' :
+                  selectedNode.suspicionScore >= 30 ? 'text-orange-400' :
+                  selectedNode.suspicionScore >= 1 ? 'text-yellow-400' : 'text-blue-400'
+                }`}>
+                  {selectedNode.suspicionScore >= 60 ? 'CRITICAL RISK' :
+                   selectedNode.suspicionScore >= 30 ? 'HIGH RISK' :
+                   selectedNode.suspicionScore >= 1 ? 'MEDIUM RISK' : 'NORMAL'}
                 </span>
               </div>
             </div>
