@@ -18,12 +18,22 @@
 ---
 
 ## 🛠 Tech Stack
-* **Frontend:** React.js, Tailwind CSS (Modern Dashboard UI)
-* **Visualization:** `react-force-graph-2d` (D3-based high-performance graph rendering)
-* **Backend:** Python (FastAPI)
-* **Graph Engine:** NetworkX (Industry-standard graph theory library)
-* **Data Analysis:** Pandas (Vectorized transaction processing)
+* **Frontend:** React (Vite) – Modern component-based UI for fast and responsive dashboard  
+* **Styling:** Tailwind CSS – Utility-first styling for clean and responsive design  
+* **Graph Visualization:** react-force-graph-2d – D3-powered interactive transaction network graph  
+* **API Communication:** Axios – Connects frontend with backend APIs  
+
+* **Backend:** Node.js with Express.js – Handles REST APIs and processing logic  
+* **File Upload:** Multer – Handles CSV uploads from users  
+* **CSV Parsing:** PapaParse – Fast and efficient CSV parsing and validation  
+
+* **Architecture & Processing:** In-memory directed graph (Adjacency List) for fast analysis  
+* **Cycle Detection:** Depth-limited DFS to detect circular money movement  
+* **Smurf Detection:** Sliding window algorithm (72-hour transaction monitoring)  
+* **Database:** No database used, fully stateless processing  
+
 * **Deployment:** Vercel (Frontend), Render/Railway (Backend)
+
 
 ---
 
