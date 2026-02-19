@@ -1,4 +1,4 @@
-# �️ Fraud Netra: Financial Crime Detection Engine
+# 👁️ Fraud Netra: Financial Crime Detection Engine
 
 ### RIFT 2026 Hackathon | Graph Theory & Financial Forensics Track
 
