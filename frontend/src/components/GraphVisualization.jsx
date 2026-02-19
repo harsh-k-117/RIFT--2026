@@ -11,6 +11,54 @@ function GraphVisualization({ data, graphData }) {
   const [searchAccountId, setSearchAccountId] = useState('');
   const [searchMessage, setSearchMessage] = useState('');
   const [cytoscapeElements, setCytoscapeElements] = useState([]);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [hoverNodeId, setHoverNodeId] = useState(null);
+
+  // Cytoscape layout configuration - maximally spread nodes apart
+  const layoutConfig = {
+    name: 'cose',
+    animate: false,
+    fit: true,
+    padding: 100,
+    nodeRepulsion: 4000000,        // Very high repulsion to push nodes apart
+    idealEdgeLength: 200,          // Long edges for maximum spacing
+    edgeElasticity: 20,            // Very low elasticity
+    nestingFactor: 1,
+    gravity: 0.1,                  // Almost no gravity - let nodes spread
+    numIter: 3000,                 // Many iterations for convergence
+    initialTemp: 1000,             // High starting temperature
+    coolingFactor: 0.90,           // Slower cooling for better spread
+    minTemp: 1.0,
+    randomize: true,               // Randomize starting positions
+    nodeOverlap: 100,              // Prevent any overlap
+    componentSpacing: 150          // Space between disconnected components
+  };
+
+  // Aggregate edges: combine multiple transactions between same nodes
+  const aggregateEdges = (links) => {
+    const edgeMap = new Map();
+    
+    links.forEach(link => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+      const key = `${sourceId}->${targetId}`;
+      
+      if (edgeMap.has(key)) {
+        const existing = edgeMap.get(key);
+        existing.txCount += 1;
+        existing.totalAmount += link.amount || 0;
+      } else {
+        edgeMap.set(key, {
+          source: sourceId,
+          target: targetId,
+          txCount: 1,
+          totalAmount: link.amount || 0
+        });
+      }
+    });
+    
+    return Array.from(edgeMap.values());
+  };
 
   // Transform data to Cytoscape format
   const transformToCytoscapeFormat = (nodes, links) => {
@@ -34,16 +82,16 @@ function GraphVisualization({ data, graphData }) {
       });
     });
     
-    // Add edges
-    links.forEach((link, idx) => {
-      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-      
+    // Aggregate and add edges
+    const aggregatedEdges = aggregateEdges(links);
+    aggregatedEdges.forEach((edge, idx) => {
       elements.push({
         data: {
           id: `edge-${idx}`,
-          source: sourceId,
-          target: targetId
+          source: edge.source,
+          target: edge.target,
+          txCount: edge.txCount,
+          totalAmount: edge.totalAmount
         }
       });
     });
@@ -84,6 +132,20 @@ function GraphVisualization({ data, graphData }) {
     setCytoscapeElements(elements);
   }, [graphData, showOnlySuspicious, riskFilter]);
 
+  // Re-run layout when new graph data is loaded (CSV upload)
+  useEffect(() => {
+    if (!cyRef.current || !graphData || graphData.nodes.length === 0) return;
+    
+    const cy = cyRef.current;
+    // Small delay to ensure elements are mounted
+    const timer = setTimeout(() => {
+      const layout = cy.layout(layoutConfig);
+      layout.run();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [graphData]);
+
   // Handle window resize
   useEffect(() => {
     const updateDimensions = () => {
@@ -104,6 +166,130 @@ function GraphVisualization({ data, graphData }) {
     if (!cyRef.current) return;
     
     const cy = cyRef.current;
+    
+    // Track zoom level for conditional labels
+    cy.on('zoom', () => {
+      setZoomLevel(cy.zoom());
+    });
+    
+    // Node hover handlers
+    cy.on('mouseover', 'node', (evt) => {
+      const node = evt.target;
+      setHoverNodeId(node.id());
+      
+      // Highlight connected edges
+      const connectedEdges = node.connectedEdges();
+      connectedEdges.addClass('hover-highlight');
+      
+      // Show tooltip
+      const data = node.data();
+      const tooltipContent = `
+        <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); 
+                    padding: 12px; 
+                    border-radius: 8px; 
+                    border: 2px solid ${data.suspicious ? '#EF4444' : '#3B82F6'}; 
+                    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+                    color: #E5E7EB;
+                    font-family: system-ui, -apple-system, sans-serif;
+                    min-width: 200px;">
+          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #F9FAFB;">${data.id}</div>
+          ${data.suspicious ? `
+            <div style="background: rgba(239, 68, 68, 0.2); padding: 6px; border-radius: 4px; margin-bottom: 6px;">
+              <span style="color: #FCA5A5;">⚠️ Suspicion Score:</span> 
+              <span style="font-weight: bold; color: #FEE2E2;">${data.suspicionScore}</span>
+            </div>
+          ` : '<div style="color: #86EFAC; font-size: 12px;">✓ Normal Account</div>'}
+          ${data.ringId ? `<div style="color: #FCD34D; font-size: 12px;">🔗 Ring: ${data.ringId}</div>` : ''}
+          <div style="font-size: 11px; color: #9CA3AF; margin-top: 6px; padding-top: 6px; border-top: 1px solid #4B5563;">
+            Transactions: ${data.totalTransactions || 0}<br/>
+            In: ${data.inDegree || 0} | Out: ${data.outDegree || 0}
+          </div>
+        </div>
+      `;
+      
+      node.popperRefObj?.destroy();
+      const popperInstance = node.popper({
+        content: () => {
+          const div = document.createElement('div');
+          div.innerHTML = tooltipContent;
+          document.body.appendChild(div);
+          return div;
+        },
+        popper: {
+          placement: 'top',
+          modifiers: [
+            { name: 'offset', options: { offset: [0, 10] } }
+          ]
+        }
+      });
+      
+      node.popperRefObj = popperInstance;
+    });
+    
+    cy.on('mouseout', 'node', (evt) => {
+      const node = evt.target;
+      setHoverNodeId(null);
+      cy.elements('.hover-highlight').removeClass('hover-highlight');
+      
+      // Remove tooltip
+      if (node.popperRefObj) {
+        const popperDiv = node.popperRefObj.state?.elements?.popper;
+        if (popperDiv) popperDiv.remove();
+        node.popperRefObj.destroy();
+        node.popperRefObj = null;
+      }
+    });
+    
+    // Edge hover handlers for aggregated transaction info
+    cy.on('mouseover', 'edge', (evt) => {
+      const edge = evt.target;
+      const data = edge.data();
+      
+      if (data.txCount > 1) {
+        const tooltipContent = `
+          <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); 
+                      padding: 10px; 
+                      border-radius: 6px; 
+                      border: 2px solid #60A5FA;
+                      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+                      color: #E5E7EB;
+                      font-family: system-ui, -apple-system, sans-serif;">
+            <div style="font-weight: bold; color: #93C5FD; margin-bottom: 4px;">
+              ${data.source} → ${data.target}
+            </div>
+            <div style="font-size: 11px; color: #D1D5DB;">
+              Transactions: <span style="font-weight: bold; color: #FCD34D;">${data.txCount}</span><br/>
+              ${data.totalAmount > 0 ? `Total: <span style="color: #86EFAC;">$${data.totalAmount.toLocaleString()}</span>` : ''}
+            </div>
+          </div>
+        `;
+        
+        edge.popperRefObj?.destroy();
+        const popperInstance = edge.popper({
+          content: () => {
+            const div = document.createElement('div');
+            div.innerHTML = tooltipContent;
+            document.body.appendChild(div);
+            return div;
+          },
+          popper: {
+            placement: 'top'
+          }
+        });
+        
+        edge.popperRefObj = popperInstance;
+      }
+    });
+    
+    cy.on('mouseout', 'edge', (evt) => {
+      const edge = evt.target;
+      if (edge.popperRefObj) {
+        const popperDiv = edge.popperRefObj.state?.elements?.popper;
+        if (popperDiv) popperDiv.remove();
+        edge.popperRefObj.destroy();
+        edge.popperRefObj = null;
+      }
+    });
     
     // Node click handler
     cy.on('tap', 'node', (evt) => {
@@ -147,7 +333,7 @@ function GraphVisualization({ data, graphData }) {
     return () => {
       cy.removeAllListeners();
     };
-  }, [cyRef.current]);
+  }, []);
 
   // Fit graph to view
   const fitToScreen = () => {
@@ -230,13 +416,23 @@ function GraphVisualization({ data, graphData }) {
           const baseSize = ele.data('suspicious') ? 25 : 20;
           return Math.min(baseSize + Math.sqrt(degree) * 3, 60);
         },
-        'label': 'data(label)',
-        'font-size': '10px',
-        'text-valign': 'center',
+        // Conditional labels: show only for suspicious nodes or when zoomed in
+        'label': (ele) => {
+          const isSuspicious = ele.data('suspicious');
+          const isHovered = ele.id() === hoverNodeId;
+          if (isHovered || isSuspicious || zoomLevel > 1.5) {
+            return ele.data('label');
+          }
+          return '';
+        },
+        'font-size': '11px',
+        'font-weight': 'bold',
+        'text-valign': 'bottom',
         'text-halign': 'center',
-        'color': '#1F2937',
-        'text-outline-width': 2,
-        'text-outline-color': '#ffffff',
+        'text-margin-y': 5,
+        'color': '#E5E7EB',
+        'text-outline-width': 3,
+        'text-outline-color': '#1F2937',
         'border-width': 2,
         'border-color': '#ffffff',
         'overlay-opacity': 0
@@ -259,23 +455,37 @@ function GraphVisualization({ data, graphData }) {
     {
       selector: 'edge',
       style: {
-        'width': 2,
-        'line-color': '#9CA3AF',
-        'target-arrow-color': '#9CA3AF',
+        'width': (ele) => {
+          const txCount = ele.data('txCount') || 1;
+          return Math.min(1 + Math.log(txCount), 5);
+        },
+        'line-color': '#4B5563',
+        'target-arrow-color': '#4B5563',
         'target-arrow-shape': 'triangle',
         'curve-style': 'bezier',
-        'arrow-scale': 1.2,
-        'opacity': 0.7
+        'arrow-scale': 1,
+        'opacity': 0.4
+      }
+    },
+    {
+      selector: 'edge.hover-highlight',
+      style: {
+        'line-color': '#60A5FA',
+        'target-arrow-color': '#60A5FA',
+        'width': 3,
+        'opacity': 0.9,
+        'z-index': 999
       }
     },
     {
       selector: 'edge.highlighted',
       style: {
-        'width': 3,
-        'line-color': '#1F2937',
-        'target-arrow-color': '#1F2937',
+        'width': 4,
+        'line-color': '#FBBF24',
+        'target-arrow-color': '#FBBF24',
         'opacity': 1,
-        'z-index': 9
+        'z-index': 999,
+        'arrow-scale': 1.5
       }
     },
     {
@@ -285,23 +495,6 @@ function GraphVisualization({ data, graphData }) {
       }
     }
   ];
-
-  // Cytoscape layout configuration
-  const layoutConfig = {
-    name: 'cose',
-    animate: false,
-    fit: true,
-    padding: 50,
-    nodeRepulsion: 400000,
-    idealEdgeLength: 100,
-    edgeElasticity: 100,
-    nestingFactor: 1.2,
-    gravity: 80,
-    numIter: 1000,
-    initialTemp: 200,
-    coolingFactor: 0.95,
-    minTemp: 1.0
-  };
 
   const { nodes, links } = getFilteredData();
 
@@ -338,60 +531,60 @@ function GraphVisualization({ data, graphData }) {
       {/* Main Graph Area */}
       <div className="flex-1">
         {/* Filters and Controls */}
-        <div className="mb-4 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200">
+        <div className="mb-4 p-4 bg-gradient-to-r from-gray-800 to-gray-900 rounded-lg border border-gray-700 shadow-xl">
           <div className="flex justify-between items-start mb-3">
             <div>
-              <h4 className="font-semibold text-sm mb-2">🎨 Color Legend:</h4>
+              <h4 className="font-semibold text-sm mb-2 text-gray-200">🎨 Threat Level Legend:</h4>
               <div className="flex flex-wrap gap-4 text-sm">
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-red-500 border-2 border-white shadow"></div>
-                  <span className="font-medium">High Risk (≥60)</span>
+                  <div className="w-5 h-5 rounded-full bg-red-500 border-2 border-gray-700 shadow-lg"></div>
+                  <span className="font-medium text-gray-300">High Risk (≥60)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-orange-500 border-2 border-white shadow"></div>
-                  <span className="font-medium">Medium Risk (30-59)</span>
+                  <div className="w-5 h-5 rounded-full bg-orange-500 border-2 border-gray-700 shadow-lg"></div>
+                  <span className="font-medium text-gray-300">Medium Risk (30-59)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-yellow-300 border-2 border-white shadow"></div>
-                  <span className="font-medium">Low Risk (1-29)</span>
+                  <div className="w-5 h-5 rounded-full bg-yellow-300 border-2 border-gray-700 shadow-lg"></div>
+                  <span className="font-medium text-gray-300">Low Risk (1-29)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-blue-500 border-2 border-white shadow"></div>
-                  <span className="font-medium">Normal</span>
+                  <div className="w-5 h-5 rounded-full bg-blue-500 border-2 border-gray-700 shadow-lg"></div>
+                  <span className="font-medium text-gray-300">Normal</span>
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-sm font-semibold text-gray-700">
+            <div className="text-right bg-gray-800 px-4 py-2 rounded-lg border border-gray-700">
+              <div className="text-sm font-semibold text-gray-200">
                 {nodes.length} Accounts | {links.length} Transactions
               </div>
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-red-400 mt-1 font-medium">
                 {nodes.filter(n => n.suspicious).length} Suspicious
               </div>
             </div>
           </div>
           
           {/* Filter Controls */}
-          <div className="mt-3 pt-3 border-t border-gray-200 flex gap-4 items-center flex-wrap">
+          <div className="mt-3 pt-3 border-t border-gray-700 flex gap-4 items-center flex-wrap">
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
                 id="showSuspicious"
                 checked={showOnlySuspicious}
                 onChange={(e) => setShowOnlySuspicious(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded"
+                className="w-4 h-4 text-red-600 rounded bg-gray-700 border-gray-600"
               />
-              <label htmlFor="showSuspicious" className="text-sm font-medium text-gray-700">
-                Show Only Suspicious
+              <label htmlFor="showSuspicious" className="text-sm font-medium text-gray-300">
+                🔍 Show Only Suspicious
               </label>
             </div>
             
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">Filter by Risk:</label>
+              <label className="text-sm font-medium text-gray-300">Filter by Risk:</label>
               <select
                 value={riskFilter}
                 onChange={(e) => setRiskFilter(e.target.value)}
-                className="text-sm border border-gray-300 rounded px-2 py-1"
+                className="text-sm border border-gray-600 rounded px-2 py-1 bg-gray-700 text-gray-200"
               >
                 <option value="all">All Levels</option>
                 <option value="high">High Risk Only</option>
@@ -407,7 +600,7 @@ function GraphVisualization({ data, graphData }) {
                   setShowOnlySuspicious(false);
                   setRiskFilter('all');
                 }}
-                className="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded transition"
+                className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-1 rounded transition border border-gray-600"
               >
                 Clear Filters
               </button>
@@ -415,33 +608,33 @@ function GraphVisualization({ data, graphData }) {
             
             <button
               onClick={fitToScreen}
-              className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition font-medium ml-auto"
+              className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition font-medium ml-auto shadow-lg"
             >
               📐 Fit to Screen
             </button>
           </div>
           
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <p className="text-xs text-gray-600">
-              💡 <strong>Tip:</strong> Click nodes to view details in side panel. Hover to see tooltips. Selected nodes have a gold border.
+          <div className="mt-3 pt-3 border-t border-gray-700">
+            <p className="text-xs text-gray-400">
+              💡 <strong className="text-gray-300">Investigation Tips:</strong> Click nodes to focus. Hover to highlight connections. Zoom in to see labels.
             </p>
           </div>
           
           {/* Search Section */}
-          <div className="mt-3 pt-3 border-t border-gray-200">
+          <div className="mt-3 pt-3 border-t border-gray-700">
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">🔍 Search Account:</label>
+              <label className="text-sm font-medium text-gray-300">🔍 Search Account:</label>
               <input
                 type="text"
                 value={searchAccountId}
                 onChange={(e) => setSearchAccountId(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                 placeholder="Enter account ID..."
-                className="flex-1 text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 text-sm border border-gray-600 rounded px-3 py-1.5 bg-gray-700 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
                 onClick={handleSearch}
-                className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded transition font-medium"
+                className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded transition font-medium shadow-lg"
               >
                 Find
               </button>
@@ -459,10 +652,18 @@ function GraphVisualization({ data, graphData }) {
         </div>
 
         {/* Graph */}
-        <div className="border-2 border-gray-300 rounded-lg bg-gradient-to-br from-gray-50 to-white overflow-hidden shadow-lg">
+        <div className="border-2 border-gray-700 rounded-lg overflow-hidden shadow-2xl" 
+             style={{ 
+               background: 'linear-gradient(135deg, #1a1f2e 0%, #2d3748 50%, #1a202c 100%)',
+               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4)'
+             }}>
           <CytoscapeComponent
             elements={cytoscapeElements}
-            style={{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }}
+            style={{ 
+              width: `${dimensions.width}px`, 
+              height: `${dimensions.height}px`,
+              background: 'transparent'
+            }}
             stylesheet={cytoscapeStylesheet}
             layout={layoutConfig}
             cy={(cy) => { cyRef.current = cy; }}
@@ -471,8 +672,8 @@ function GraphVisualization({ data, graphData }) {
         </div>
         
         {/* Controls Info */}
-        <div className="mt-2 text-xs text-gray-500 text-center">
-          🖱️ Drag to pan | Scroll to zoom | Click nodes to select | Drag nodes to reposition
+        <div className="mt-2 text-xs text-gray-500 text-center bg-gray-800 py-2 rounded-lg border border-gray-700">
+          🖱️ Drag to pan | Scroll to zoom | Click nodes to investigate | Hover for details
         </div>
       </div>
 
