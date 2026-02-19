@@ -1,4 +1,4 @@
 # MONEY MULING DETECTION CHALLENGE
 
-Graph Theory / Financial Crime Detection Track
-This is a Graph-Based Financial Crime Detection Engine
+<h1>Graph Theory / Financial Crime Detection Track<br>
+This is a Graph-Based Financial Crime Detection Engine<br></h1>
