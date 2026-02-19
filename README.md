@@ -1,140 +1,297 @@
-# �️ Fraud Netra: Financial Crime Detection Engine
+# 👁️ Fraud Netra: Graph-Based Financial Crime Detection Engine  
+### RIFT 2026 Hackathon | Money Muling Detection Challenge
 
-### RIFT 2026 Hackathon | Graph Theory & Financial Forensics Track
-
-[![Live Demo](https://img.shields.io/badge/demo-live_now-green?style=for-the-badge)](YOUR_LIVE_URL_HERE)
+[![Live Demo](https://img.shields.io/badge/demo-live_now-green?style=for-the-badge)](YOUR_LIVE_URL_HERE)  
 [![LinkedIn Demo](https://img.shields.io/badge/LinkedIn-Video_Demo-blue?style=for-the-badge)](YOUR_LINKEDIN_VIDEO_URL_HERE)
 
-## 📌 Problem Overview
+---
 
-> Money muling is a serious financial crime. Criminals use many people (called “mules”) and multiple bank accounts to move illegal money from one place to another and hide its source. They send money through several accounts to make tracking difficult. Traditional database checks and normal queries often cannot detect these complex multi-step transaction networks.
+## 📌 Problem Statement
 
-**Fraud Netra** ("Netra" = Eye in Sanskrit) is a web-based investigation tool that converts simple transaction CSV files into a visual network graph. This helps detect hidden fraud patterns that are hard to see in normal tables. It can identify:
+Money muling is a serious financial crime where criminals move illegal money through multiple accounts to hide its origin. These accounts form hidden networks that are difficult to detect using traditional database queries.
 
-1. **Circular Routing:** When money moves through several accounts and comes back to the original account.
-2. **Smurfing/Structuring:** When money is split into many small transfers or sent to many accounts to avoid detection.
-3. **Layering Accounts:** Accounts that only receive and quickly send money, acting as middle accounts to hide the real source.
+The goal of this challenge is to build a **live web-based Financial Forensics Engine** that:
+
+- Accepts transaction data as CSV
+- Models transactions as a directed graph
+- Detects money muling patterns
+- Highlights suspicious accounts visually
+- Exports structured JSON output in exact required format
+
+Fraud Netra solves this problem using graph theory and network analysis.
 
 ---
 
 ## 🛠 Tech Stack
 
-- **Frontend:** React (Vite) – Modern component-based UI for fast and responsive dashboard
-- **Styling:** Tailwind CSS – Utility-first styling for clean and responsive design
-- **Graph Visualization:** react-force-graph-2d – D3-powered interactive transaction network graph
-- **API Communication:** Axios – Connects frontend with backend APIs
+Frontend: React (Vite) with Tailwind CSS  
+Graph Visualization: react-force-graph-2d  
+API Communication: Axios  
 
-- **Backend:** Node.js with Express.js – Handles REST APIs and processing logic
-- **File Upload:** Multer – Handles CSV uploads from users
-- **CSV Parsing:** PapaParse – Fast and efficient CSV parsing and validation
+Backend: Node.js with Express.js  
+File Upload: Multer  
+CSV Parsing: PapaParse  
 
-- **Architecture & Processing:** In-memory directed graph (Adjacency List) for fast analysis
-- **Cycle Detection:** Depth-limited DFS to detect circular money movement
-- **Smurf Detection:** Sliding window algorithm (72-hour transaction monitoring)
-- **Database:** No database used, fully stateless processing
+Processing Engine: In-memory directed graph (Adjacency List)  
+Database: None (fully stateless processing)  
 
-- **Deployment:** Vercel (Frontend), Render/Railway (Backend)
+Deployment: Vercel (Frontend), Render/Railway (Backend)
 
 ---
 
 ## 🏗 System Architecture
 
-1. **Ingestion:** User uploads a standardized CSV (Transaction ID, Sender, Receiver, Amount, Timestamp).
-2. **Transformation:** The Backend parses the CSV and constructs a **Directed Graph $G(V, E)$** where nodes $V$ are accounts and edges $E$ are transactions.
-3. **Analysis Engine:** Executes concurrent algorithms to detect cycles, calculate centrality, and flag temporal velocity.
-4. **Interactive Dashboard:** Returns a JSON payload to the React frontend, rendering an interactive network map with "Hot Node" highlighting.
+The system follows this processing pipeline:
+
+CSV Upload  
+→ Schema Validation  
+→ Graph Construction  
+→ Fraud Pattern Detection  
+→ Suspicion Scoring  
+→ JSON Output Builder  
+→ Interactive Graph + Table Display  
+
+Each transaction becomes a directed edge (sender → receiver).  
+Each account becomes a node in the graph.
 
 ---
 
-## 🧠 Algorithm Approach & Complexity
+## 📥 Input Specification
 
-Our engine utilizes a multi-layered approach to detect mule activities:
+The uploaded CSV must contain EXACT columns:
 
-### 1. Simple Cycle Detection (The "Ring" Pattern)
+transaction_id (String)  
+sender_id (String)  
+receiver_id (String)  
+amount (Float)  
+timestamp (YYYY-MM-DD HH:MM:SS)  
 
-- **Algorithm:** Johnson’s Algorithm (via `networkx.simple_cycles`).
-- **Logic:** Detects $A \to B \to C \to A$ patterns. We limit searches to a depth of 5 hops to optimize performance.
-- **Complexity:** $O((V+E)(C+1))$ where $C$ is the number of cycles found.
-
-### 2. Degree Centrality (Smurfing & Fan-out)
-
-- **Logic:** Calculates the `In-Degree` and `Out-Degree` of every node.
-- **Threshold:** Nodes with $>10$ unique connections in a short window are flagged for "Smurfing."
-- **Complexity:** $O(E)$ for a single pass through all transactions.
-
-### 3. Temporal Flow Analysis
-
-- **Logic:** Calculates the "dwell time" of funds. If money leaves an account within 24 hours of arrival, it receives a "High Velocity" penalty.
+Invalid schemas are rejected.
 
 ---
 
-## ⚖️ Suspicion Score Methodology
+## 🧠 Fraud Detection Engine
 
-Every account is assigned a **Mule Score (0-10)** based on a weighted heuristic:
+Fraud Netra detects three main money muling patterns:
 
-$$Score = (W_{cyc} \cdot C) + (W_{vel} \cdot V) + (W_{smf} \cdot S)$$
+### 1️⃣ Circular Fund Routing (Cycles)
 
-| Weight ($W$) | Indicator               | Description                                       |
-| :----------- | :---------------------- | :------------------------------------------------ |
-| **5.0**      | **Cycle Participation** | Direct involvement in a circular money path.      |
-| **3.0**      | **Temporal Velocity**   | Funds transferred out in < 24 hours of receipt.   |
-| **2.0**      | **Smurfing Factor**     | High connectivity (>10) with low average amounts. |
+Money moves in a loop such as:
+
+A → B → C → A  
+
+Rules:
+- Detect cycles of length 3 to 5 only
+- All accounts in the cycle belong to the same ring
+- Each cycle becomes a fraud ring
+
+Algorithm:
+- Depth-limited DFS with path tracking
+- Canonical representation used to remove duplicates
+
+---
+
+### 2️⃣ Smurfing Patterns (Fan-in / Fan-out)
+
+Fan-in:
+- ≥10 unique senders → 1 receiver
+- Within a 72-hour window
+
+Fan-out:
+- 1 sender → ≥10 receivers
+- Within 72-hour window
+
+Algorithm:
+- Group by sender/receiver
+- Sort by timestamp
+- Apply sliding window
+- Count unique accounts
+
+Ring members:
+- Aggregator + participants
+
+---
+
+### 3️⃣ Layered Shell Networks
+
+Money passes through low-activity intermediate accounts.
+
+Rules:
+- Path length ≥ 3
+- Intermediate accounts have ≤ 3 total transactions
+
+Algorithm:
+- BFS up to depth 4
+- Check activity of intermediate nodes
+- Flag suspicious chains
+
+---
+
+## 🚫 False Positive Control
+
+To avoid flagging legitimate merchants or payroll systems:
+
+Accounts are NOT flagged if:
+- Transaction count > 50
+- Many unique partners
+- No cycles detected
+- No smurfing patterns
+
+This ensures high precision and minimizes false positives.
+
+---
+
+## ⚖️ Suspicion Score Methodology (0–100)
+
+Each account receives a score based on detected patterns:
+
+Cycle member: +40  
+Smurf aggregator: +35  
+Smurf participant: +20  
+Shell intermediate: +30  
+High velocity transfer: +15  
+Large suspicious amount: +10  
+
+Score is capped at 100.
+
+Suspicious accounts are sorted in descending order before JSON export.
+
+The scoring model is rule-based and fully explainable.
+
+---
+
+## 📊 Required Outputs
+
+### 1️⃣ Interactive Graph Visualization
+
+- All accounts as nodes  
+- Directed edges for transactions  
+- Fraud rings clearly highlighted  
+- Suspicious nodes visually distinct  
+- Hover shows:
+  - account_id
+  - suspicion_score
+  - detected_patterns
+
+---
+
+### 2️⃣ JSON Output (STRICT FORMAT)
+
+The system generates EXACT structure:
+
+{
+  suspicious_accounts: [],
+  fraud_rings: [],
+  summary: {}
+}
+
+### suspicious_accounts includes:
+- account_id (String)
+- suspicion_score (Float 0–100)
+- detected_patterns (Array<String>)
+- ring_id (String)
+
+Sorted by suspicion_score descending.
+
+### fraud_rings includes:
+- ring_id
+- member_accounts[]
+- pattern_type
+- risk_score
+
+### summary includes:
+- total_accounts_analyzed
+- suspicious_accounts_flagged
+- fraud_rings_detected
+- processing_time_seconds
+
+Exact format matching is maintained.
+
+---
+
+### 3️⃣ Fraud Ring Summary Table (UI)
+
+Displays:
+- Ring ID
+- Pattern Type
+- Member Count
+- Risk Score
+- Member Account IDs (comma separated)
+
+---
+
+## ⏱ Complexity & Performance
+
+Graph Construction: O(E)  
+Cycle Detection (depth-limited DFS): manageable for datasets up to 10k  
+Smurf Detection (sliding window): O(E)  
+Shell Detection (BFS traversal): O(V + E)  
+
+Performance Requirement:
+- Upload to results display ≤ 30 seconds
+- Optimized for datasets up to 10,000 transactions
+
+Precision Target: ≥70%  
+Recall Target: ≥60%  
 
 ---
 
 ## ⚙️ Installation & Setup
 
-### Prerequisites
+Prerequisite:
+Node.js 18+
 
-- Python 3.9+
-- Node.js 18+
+Backend:
+cd backend  
+npm install  
+node server.js  
 
-### 1. Backend Setup
+Frontend:
+cd frontend  
+npm install  
+npm run dev  
 
-```bash
-cd backend
-pip install -r requirements.txt
-python main.py
-```
-
-### 2. Frontend Setup
-
-```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install dependencies
-npm install
-
-# Start the development server
-npm run dev
-```
+---
 
 ## 📖 Usage Instructions
 
--Upload: Drag and drop your transactions.csv into the dashboard upload zone. Ensure the file follows the required [transaction_id, sender_id, receiver_id, amount, timestamp] format.< br>
+1. Upload CSV file in required format  
+2. Click “Run Detection”  
+3. View interactive graph  
+4. Inspect fraud rings in table  
+5. Download JSON investigation report  
 
--Analyze: Click the "Run Detection" button to trigger the Graph Analysis Engine.<br>
+The application is publicly accessible and requires no login.
 
--Inspect: Once rendered, click or hover over any Red Node to view specific account details, suspicion scores, and identified fraud patterns.<br>
-
--Export: Click the "Download JSON" button to get the final report for submission. The output is formatted for exact line-by-line test case matching.<br>
+---
 
 ## ⚠️ Known Limitations
 
--Scale Constraints: The current interactive visualization is optimized for datasets up to 10,000 transactions; performance may decrease as edge density increases.<br>
+- Optimized for datasets up to 10k transactions  
+- Extremely dense graphs may reduce visualization speed  
+- Very complex long-term laundering may require extended analysis  
+- Precision depends on pattern clarity in dataset  
 
--Entity Traps: While the algorithm filters for high-volume merchants, extremely complex legitimate payroll structures may occasionally require manual whitelisting to improve precision.<br>
+---
 
--Temporal Window: Current smurfing detection is optimized for the mandatory 72-hour window; patterns outside this timeframe may receive lower suspicion weights.<br>
+## 👥 Team Innov8ors
 
-## 👥 Team Members
+Harsh Kulkarni – System Design & GitHub  
+Abhishek Kalimath – Full Stack Development  
+Yash Lawande – AI Integration  
+Sarthak Manke – LLM & Prompt Engineering  
 
-Team Name : Innov8ors<br><br>
-Team Members : <br>
-[ Harsh Kulkarni ] - Git/GitHub and Team Adviser<br>
-[ Abhishek Kalimath ] - Technical Head and Web Development <br>
-[ Yash Lawande ] - AI-Integration<br>
-[ Sarthak Manke ] - LLM and Prompting skils<br>
+---
 
-...Developed for RIFT 2026 Hackathon
+## 🎯 Final Goal
+
+Fraud Netra transforms raw transaction data into a structured financial investigation system that:
+
+- Models money flow as a graph  
+- Detects hidden mule networks  
+- Assigns interpretable suspicion scores  
+- Visualizes fraud rings clearly  
+- Exports structured forensic JSON output  
+
+Built to satisfy all RIFT 2026 evaluation requirements.
+
