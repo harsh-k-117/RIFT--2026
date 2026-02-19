@@ -1,4 +1,4 @@
-# 🛡️ AegisGraph: Financial Crime Detection Engine
+# 🛡️ FraudNetra : Financial Crime Detection Engine
 ### RIFT 2026 Hackathon | Graph Theory & Financial Forensics Track
 
 [![Live Demo](https://img.shields.io/badge/demo-live_now-green?style=for-the-badge)](YOUR_LIVE_URL_HERE)
