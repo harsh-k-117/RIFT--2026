@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
 import { getNodeColor } from '../utils/graphHelpers';
 
@@ -13,29 +13,83 @@ function GraphVisualization({ data, graphData }) {
   const [cytoscapeElements, setCytoscapeElements] = useState([]);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [hoverNodeId, setHoverNodeId] = useState(null);
+  const [layoutType, setLayoutType] = useState('auto'); // New: layout selector
+  const popperInstancesRef = useRef(new Set()); // Track all popper instances
 
-  // Cytoscape layout configuration - maximally spread nodes apart
-  const layoutConfig = {
-    name: 'cose',
-    animate: false,
-    fit: true,
-    padding: 100,
-    nodeRepulsion: 4000000,        // Very high repulsion to push nodes apart
-    idealEdgeLength: 200,          // Long edges for maximum spacing
-    edgeElasticity: 20,            // Very low elasticity
-    nestingFactor: 1,
-    gravity: 0.1,                  // Almost no gravity - let nodes spread
-    numIter: 3000,                 // Many iterations for convergence
-    initialTemp: 1000,             // High starting temperature
-    coolingFactor: 0.90,           // Slower cooling for better spread
-    minTemp: 1.0,
-    randomize: true,               // Randomize starting positions
-    nodeOverlap: 100,              // Prevent any overlap
-    componentSpacing: 150          // Space between disconnected components
-  };
+  // Get layout config based on selected type and dataset size
+  const getLayoutConfig = useCallback((type, nodeCount) => {
+    const layouts = {
+      'cose': {
+        name: 'cose',
+        animate: false,
+        fit: true,
+        padding: 50,
+        nodeRepulsion: 400000,
+        idealEdgeLength: 100,
+        edgeElasticity: 100,
+        nestingFactor: 1.2,
+        gravity: 0.25,
+        numIter: 500,
+        initialTemp: 200,
+        coolingFactor: 0.95,
+        minTemp: 1.0,
+        randomize: true,
+        nodeOverlap: 20,
+        componentSpacing: 100
+      },
+      'circle': {
+        name: 'circle',
+        animate: false,
+        fit: true,
+        padding: 50,
+        avoidOverlap: true,
+        radius: Math.max(300, nodeCount / 2),
+        startAngle: 0,
+        sweep: 2 * Math.PI,
+        clockwise: true,
+        sort: (a, b) => b.data('degree') - a.data('degree'),
+        spacing: 20
+      },
+      'grid': {
+        name: 'grid',
+        animate: false,
+        fit: true,
+        padding: 50,
+        avoidOverlap: true,
+        avoidOverlapPadding: 10,
+        rows: Math.ceil(Math.sqrt(nodeCount)),
+        cols: Math.ceil(Math.sqrt(nodeCount))
+      },
+      'concentric': {
+        name: 'concentric',
+        animate: false,
+        fit: true,
+        padding: 50,
+        concentric: (node) => node.data('degree'),
+        levelWidth: () => 2,
+        minNodeSpacing: 50
+      }
+    };
 
-  // Aggregate edges: combine multiple transactions between same nodes
-  const aggregateEdges = (links) => {
+    return layouts[type] || layouts['cose'];
+  }, []);
+
+  // Cytoscape layout configuration - memoized and adaptive based on dataset size
+  const layoutConfig = useMemo(() => {
+    const nodeCount = graphData?.nodes?.length || 0;
+    
+    // Auto-select best layout for dataset size
+    if (layoutType === 'auto') {
+      if (nodeCount > 500) return getLayoutConfig('circle', nodeCount);
+      if (nodeCount > 200) return getLayoutConfig('grid', nodeCount);
+      return getLayoutConfig('cose', nodeCount);
+    }
+    
+    return getLayoutConfig(layoutType, nodeCount);
+  }, [graphData, layoutType, getLayoutConfig]);
+
+  // Aggregate edges: combine multiple transactions between same nodes - MEMOIZED
+  const aggregateEdges = useCallback((links) => {
     const edgeMap = new Map();
     
     links.forEach(link => {
@@ -58,10 +112,10 @@ function GraphVisualization({ data, graphData }) {
     });
     
     return Array.from(edgeMap.values());
-  };
+  }, []);
 
-  // Transform data to Cytoscape format
-  const transformToCytoscapeFormat = (nodes, links) => {
+  // Transform data to Cytoscape format - MEMOIZED
+  const transformToCytoscapeFormat = useCallback((nodes, links) => {
     const elements = [];
     
     // Add nodes
@@ -97,10 +151,10 @@ function GraphVisualization({ data, graphData }) {
     });
     
     return elements;
-  };
+  }, [aggregateEdges]);
 
-  // Filter nodes based on settings
-  const getFilteredData = () => {
+  // Filter nodes based on settings - MEMOIZED
+  const getFilteredData = useCallback(() => {
     if (!graphData || !graphData.nodes) return { nodes: [], links: [] };
     
     const filteredNodes = graphData.nodes.filter(node => {
@@ -123,14 +177,15 @@ function GraphVisualization({ data, graphData }) {
     });
     
     return { nodes: filteredNodes, links: filteredLinks };
-  };
+  }, [graphData, showOnlySuspicious, riskFilter]);
 
   // Update Cytoscape elements when data or filters change
   useEffect(() => {
+    if (!graphData) return;
     const { nodes, links } = getFilteredData();
     const elements = transformToCytoscapeFormat(nodes, links);
     setCytoscapeElements(elements);
-  }, [graphData, showOnlySuspicious, riskFilter]);
+  }, [graphData, showOnlySuspicious, riskFilter, getFilteredData, transformToCytoscapeFormat]);
 
   // Re-run layout when new graph data is loaded (CSV upload)
   useEffect(() => {
@@ -161,16 +216,38 @@ function GraphVisualization({ data, graphData }) {
     return () => window.removeEventListener('resize', updateDimensions);
   }, [selectedNode]);
 
+  // Clean up all popper instances
+  const cleanupPoppers = useCallback(() => {
+    popperInstancesRef.current.forEach(popper => {
+      try {
+        const popperDiv = popper.state?.elements?.popper;
+        if (popperDiv && popperDiv.parentNode) {
+          popperDiv.parentNode.removeChild(popperDiv);
+        }
+        popper.destroy();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    });
+    popperInstancesRef.current.clear();
+  }, []);
+
   // Initialize Cytoscape event handlers
   useEffect(() => {
     if (!cyRef.current) return;
     
     const cy = cyRef.current;
+    let zoomTimeout;
     
-    // Track zoom level for conditional labels
-    cy.on('zoom', () => {
-      setZoomLevel(cy.zoom());
-    });
+    // Track zoom level for conditional labels - DEBOUNCED
+    const handleZoom = () => {
+      clearTimeout(zoomTimeout);
+      zoomTimeout = setTimeout(() => {
+        setZoomLevel(cy.zoom());
+      }, 100);
+    };
+    
+    cy.on('zoom', handleZoom);
     
     // Node hover handlers
     cy.on('mouseover', 'node', (evt) => {
@@ -184,30 +261,37 @@ function GraphVisualization({ data, graphData }) {
       // Show tooltip
       const data = node.data();
       const tooltipContent = `
-        <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); 
+        <div style="background: white; 
                     padding: 12px; 
-                    border-radius: 8px; 
+                    border-radius: 6px; 
                     border: 2px solid ${data.suspicious ? '#EF4444' : '#3B82F6'}; 
-                    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-                    color: #E5E7EB;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    color: #1F2937;
                     font-family: system-ui, -apple-system, sans-serif;
                     min-width: 200px;">
-          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #F9FAFB;">${data.id}</div>
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #111827; font-family: monospace;">${data.id}</div>
           ${data.suspicious ? `
-            <div style="background: rgba(239, 68, 68, 0.2); padding: 6px; border-radius: 4px; margin-bottom: 6px;">
-              <span style="color: #FCA5A5;">⚠️ Suspicion Score:</span> 
-              <span style="font-weight: bold; color: #FEE2E2;">${data.suspicionScore}</span>
+            <div style="background: #FEE2E2; padding: 6px 8px; border-radius: 4px; margin-bottom: 6px; border-left: 3px solid #EF4444;">
+              <div style="color: #7F1D1D; font-size: 11px; font-weight: 600; margin-bottom: 2px;">SUSPICIOUS ACCOUNT</div>
+              <div style="color: #991B1B;">Score: <span style="font-weight: 700;">${data.suspicionScore}</span></div>
             </div>
-          ` : '<div style="color: #86EFAC; font-size: 12px;">✓ Normal Account</div>'}
-          ${data.ringId ? `<div style="color: #FCD34D; font-size: 12px;">🔗 Ring: ${data.ringId}</div>` : ''}
-          <div style="font-size: 11px; color: #9CA3AF; margin-top: 6px; padding-top: 6px; border-top: 1px solid #4B5563;">
-            Transactions: ${data.totalTransactions || 0}<br/>
-            In: ${data.inDegree || 0} | Out: ${data.outDegree || 0}
+          ` : '<div style="color: #059669; font-size: 12px; font-weight: 600; padding: 4px 0;">Normal Account</div>'}
+          ${data.ringId ? `<div style="color: #D97706; font-size: 11px; font-weight: 600; background: #FEF3C7; padding: 4px 8px; border-radius: 4px; margin: 4px 0;">Ring: ${data.ringId}</div>` : ''}
+          <div style="font-size: 11px; color: #6B7280; margin-top: 8px; padding-top: 8px; border-top: 1px solid #E5E7EB;">
+            <div style="margin-bottom: 4px;">Transactions: <strong>${data.totalTransactions || 0}</strong></div>
+            <div>Incoming: <strong style="color: #059669;">${data.inDegree || 0}</strong> | Outgoing: <strong style="color: #DC2626;">${data.outDegree || 0}</strong></div>
           </div>
         </div>
       `;
       
-      node.popperRefObj?.destroy();
+      // Clean up old popper if exists
+      if (node.popperRefObj) {
+        const oldDiv = node.popperRefObj.state?.elements?.popper;
+        if (oldDiv && oldDiv.parentNode) oldDiv.parentNode.removeChild(oldDiv);
+        node.popperRefObj.destroy();
+        popperInstancesRef.current.delete(node.popperRefObj);
+      }
+      
       const popperInstance = node.popper({
         content: () => {
           const div = document.createElement('div');
@@ -224,6 +308,7 @@ function GraphVisualization({ data, graphData }) {
       });
       
       node.popperRefObj = popperInstance;
+      popperInstancesRef.current.add(popperInstance);
     });
     
     cy.on('mouseout', 'node', (evt) => {
@@ -234,7 +319,10 @@ function GraphVisualization({ data, graphData }) {
       // Remove tooltip
       if (node.popperRefObj) {
         const popperDiv = node.popperRefObj.state?.elements?.popper;
-        if (popperDiv) popperDiv.remove();
+        if (popperDiv && popperDiv.parentNode) {
+          popperDiv.parentNode.removeChild(popperDiv);
+        }
+        popperInstancesRef.current.delete(node.popperRefObj);
         node.popperRefObj.destroy();
         node.popperRefObj = null;
       }
@@ -247,24 +335,31 @@ function GraphVisualization({ data, graphData }) {
       
       if (data.txCount > 1) {
         const tooltipContent = `
-          <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); 
-                      padding: 10px; 
+          <div style="background: white; 
+                      padding: 10px 12px; 
                       border-radius: 6px; 
-                      border: 2px solid #60A5FA;
-                      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-                      color: #E5E7EB;
+                      border: 2px solid #3B82F6;
+                      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                      color: #1F2937;
                       font-family: system-ui, -apple-system, sans-serif;">
-            <div style="font-weight: bold; color: #93C5FD; margin-bottom: 4px;">
+            <div style="font-weight: 600; color: #1F2937; margin-bottom: 4px; font-size: 12px;">
               ${data.source} → ${data.target}
             </div>
-            <div style="font-size: 11px; color: #D1D5DB;">
-              Transactions: <span style="font-weight: bold; color: #FCD34D;">${data.txCount}</span><br/>
-              ${data.totalAmount > 0 ? `Total: <span style="color: #86EFAC;">$${data.totalAmount.toLocaleString()}</span>` : ''}
+            <div style="font-size: 11px; color: #6B7280;">
+              Transactions: <span style="font-weight: 700; color: #111827;">${data.txCount}</span><br/>
+              ${data.totalAmount > 0 ? `Total Amount: <span style="color: #059669; font-weight: 600;">$${data.totalAmount.toLocaleString()}</span>` : ''}
             </div>
           </div>
         `;
         
-        edge.popperRefObj?.destroy();
+        // Clean up old popper if exists
+        if (edge.popperRefObj) {
+          const oldDiv = edge.popperRefObj.state?.elements?.popper;
+          if (oldDiv && oldDiv.parentNode) oldDiv.parentNode.removeChild(oldDiv);
+          edge.popperRefObj.destroy();
+          popperInstancesRef.current.delete(edge.popperRefObj);
+        }
+        
         const popperInstance = edge.popper({
           content: () => {
             const div = document.createElement('div');
@@ -278,6 +373,7 @@ function GraphVisualization({ data, graphData }) {
         });
         
         edge.popperRefObj = popperInstance;
+        popperInstancesRef.current.add(popperInstance);
       }
     });
     
@@ -285,7 +381,10 @@ function GraphVisualization({ data, graphData }) {
       const edge = evt.target;
       if (edge.popperRefObj) {
         const popperDiv = edge.popperRefObj.state?.elements?.popper;
-        if (popperDiv) popperDiv.remove();
+        if (popperDiv && popperDiv.parentNode) {
+          popperDiv.parentNode.removeChild(popperDiv);
+        }
+        popperInstancesRef.current.delete(edge.popperRefObj);
         edge.popperRefObj.destroy();
         edge.popperRefObj = null;
       }
@@ -331,9 +430,11 @@ function GraphVisualization({ data, graphData }) {
     });
     
     return () => {
+      clearTimeout(zoomTimeout);
       cy.removeAllListeners();
+      cleanupPoppers();
     };
-  }, []);
+  }, [cleanupPoppers]);
 
   // Fit graph to view
   const fitToScreen = () => {
@@ -345,7 +446,7 @@ function GraphVisualization({ data, graphData }) {
   // Handle search
   const handleSearch = () => {
     if (!searchAccountId.trim()) {
-      setSearchMessage('⚠️ Please enter an account ID');
+      setSearchMessage('Please enter an account ID');
       return;
     }
     
@@ -355,13 +456,13 @@ function GraphVisualization({ data, graphData }) {
     const node = cy.getElementById(searchAccountId.trim());
     
     if (node.length === 0) {
-      setSearchMessage(`❌ Account "${searchAccountId}" not found in dataset`);
+      setSearchMessage(`Account "${searchAccountId}" not found in dataset`);
       return;
     }
     
     // Check if visible (not filtered out)
     if (node.style('display') === 'none') {
-      setSearchMessage(`⚠️ Account "${searchAccountId}" exists but is filtered out. Clear filters to view.`);
+      setSearchMessage(`Account "${searchAccountId}" exists but is filtered out. Clear filters to view.`);
       return;
     }
     
@@ -378,7 +479,7 @@ function GraphVisualization({ data, graphData }) {
     };
     
     setSelectedNode(nodeData);
-    setSearchMessage(`✓ Focused on ${searchAccountId.trim()}`);
+    setSearchMessage(`Focused on ${searchAccountId.trim()}`);
     
     // Highlight and center
     const neighbors = node.neighborhood();
@@ -496,8 +597,7 @@ function GraphVisualization({ data, graphData }) {
     }
   ];
 
-  const { nodes, links } = getFilteredData();
-
+  // Check if graphData exists BEFORE calling getFilteredData()
   if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
     return (
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center bg-gray-50">
@@ -526,108 +626,136 @@ function GraphVisualization({ data, graphData }) {
     );
   }
 
+  // Now safe to call getFilteredData() after we know graphData exists
+  const { nodes, links } = getFilteredData();
+
   return (
     <div className="relative flex gap-6 w-full">
       {/* Main Graph Area */}
       <div className="flex-1 min-w-0">
-        {/* Premium Controls Panel */}
-        <div className="mb-6 glass-card p-6 rounded-xl border border-white/10 shadow-2xl">
-          <div className="flex justify-between items-start mb-4">
+        {/* Controls Panel */}
+        <div className="mb-6 bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+          {/* Stats and Legend */}
+          <div className="flex justify-between items-start mb-6">
             <div>
-              <h4 className="font-semibold text-sm mb-3 text-white/90" style={{fontFamily: 'Space Grotesk, sans-serif'}}>⚡ Threat Level Classification</h4>
+              <h4 className="font-semibold text-sm mb-3 text-gray-900">Risk Level Classification</h4>
               <div className="flex flex-wrap gap-3 text-sm">
-                <div className="glass px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition">
-                  <div className="w-3 h-3 rounded-full bg-red-500 status-pulse"></div>
-                  <span className="font-medium text-gray-300 text-xs">Critical ≥60</span>
+                <div className="bg-gray-50 px-3 py-2 rounded border border-gray-200 flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                  <span className="font-medium text-gray-700 text-xs">Critical ≥60</span>
                 </div>
-                <div className="glass px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition">
-                  <div className="w-3 h-3 rounded-full bg-orange-500 status-pulse"></div>
-                  <span className="font-medium text-gray-300 text-xs">High 30-59</span>
+                <div className="bg-gray-50 px-3 py-2 rounded border border-gray-200 flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                  <span className="font-medium text-gray-700 text-xs">High 30-59</span>
                 </div>
-                <div className="glass px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition">
+                <div className="bg-gray-50 px-3 py-2 rounded border border-gray-200 flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-yellow-300"></div>
-                  <span className="font-medium text-gray-300 text-xs">Medium 1-29</span>
+                  <span className="font-medium text-gray-700 text-xs">Medium 1-29</span>
                 </div>
-                <div className="glass px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-white/5 transition">
+                <div className="bg-gray-50 px-3 py-2 rounded border border-gray-200 flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  <span className="font-medium text-gray-300 text-xs">Normal</span>
+                  <span className="font-medium text-gray-700 text-xs">Normal</span>
                 </div>
               </div>
             </div>
-            <div className="glass-strong px-5 py-3 rounded-xl border border-white/10">
-              <div className="text-sm font-bold text-white" style={{fontFamily: 'Space Grotesk, sans-serif'}}>
-                {nodes.length} <span className="text-xs text-gray-400 font-normal">Accounts</span> • {links.length} <span className="text-xs text-gray-400 font-normal">Transactions</span>
+            <div className="bg-blue-50 border border-blue-200 px-5 py-3 rounded-lg">
+              <div className="text-sm font-bold text-gray-900">
+                {nodes.length} <span className="text-xs text-gray-500 font-normal">Accounts</span> • {links.length} <span className="text-xs text-gray-500 font-normal">Transactions</span>
               </div>
-              <div className="text-xs text-red-400 mt-1.5 font-semibold flex items-center gap-1">
-                <div className="w-1.5 h-1.5 bg-red-500 rounded-full status-pulse"></div>
-                {nodes.filter(n => n.suspicious).length} Flagged
+              <div className="text-xs text-red-600 mt-1.5 font-semibold flex items-center gap-1">
+                <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+                {nodes.filter(n => n.suspicious).length} Suspicious
               </div>
             </div>
           </div>
           
-          {/* Filter Controls */}
-          <div className="mt-4 pt-4 border-t border-white/10 flex gap-3 items-center flex-wrap">
-            <div className="glass px-4 py-2 rounded-lg flex items-center gap-2 cursor-pointer hover:bg-white/5 transition">
-              <input
-                type="checkbox"
-                id="showSuspicious"
-                checked={showOnlySuspicious}
-                onChange={(e) => setShowOnlySuspicious(e.target.checked)}
-                className="w-4 h-4 text-red-600 rounded cursor-pointer"
-              />
-              <label htmlFor="showSuspicious" className="text-xs font-semibold text-gray-300 cursor-pointer">
-                🎯 Suspicious Only
-              </label>
-            </div>
-            
-            <div className="glass px-4 py-2 rounded-lg flex items-center gap-2">
-              <label className="text-xs font-semibold text-gray-400">Risk Level:</label>
-              <select
-                value={riskFilter}
-                onChange={(e) => setRiskFilter(e.target.value)}
-                className="text-xs font-semibold glass border-0 rounded px-2 py-1 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                <option value="all">All Levels</option>
-                <option value="high">High Risk Only</option>
-                <option value="medium">Medium Risk Only</option>
-                <option value="low">Low Risk Only</option>
-                <option value="normal">Normal Only</option>
-              </select>
-            </div>
+          {/* Layout Selector and Filters */}
+          <div className="mb-4 pb-4 border-b border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Layout Type */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-600">Layout Algorithm</label>
+                <select
+                  value={layoutType}
+                  onChange={(e) => setLayoutType(e.target.value)}
+                  className="text-sm border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="auto">Auto (Recommended)</option>
+                  <option value="cose">Force-Directed</option>
+                  <option value="circle">Circular</option>
+                  <option value="grid">Grid</option>
+                  <option value="concentric">Concentric</option>
+                </select>
+              </div>
 
-            {(showOnlySuspicious || riskFilter !== 'all') && (
-              <button
-                onClick={() => {
-                  setShowOnlySuspicious(false);
-                  setRiskFilter('all');
-                }}
-                className="text-xs glass hover:bg-white/10 text-gray-300 px-4 py-2 rounded-lg transition font-semibold"
-              >
-                ✕ Clear
-              </button>
-            )}
-            
-            <button
-              onClick={fitToScreen}
-              className="text-xs bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-4 py-2 rounded-lg transition font-semibold ml-auto shadow-lg hover:shadow-blue-500/50"
-            >
-              🎯 Fit View
-            </button>
+              {/* Risk Filter */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-600">Risk Level Filter</label>
+                <select
+                  value={riskFilter}
+                  onChange={(e) => setRiskFilter(e.target.value)}
+                  className="text-sm border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">All Levels</option>
+                  <option value="high">High Risk Only</option>
+                  <option value="medium">Medium Risk Only</option>
+                  <option value="low">Low Risk Only</option>
+                  <option value="normal">Normal Only</option>
+                </select>
+              </div>
+
+              {/* Suspicious Only Toggle */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-600">View Options</label>
+                <label className="flex items-center gap-2 bg-gray-50 border border-gray-300 rounded px-3 py-2 cursor-pointer hover:bg-gray-100 transition">
+                  <input
+                    type="checkbox"
+                    checked={showOnlySuspicious}
+                    onChange={(e) => setShowOnlySuspicious(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Suspicious Only</span>
+                </label>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-600">Actions</label>
+                <div className="flex gap-2">
+                  {(showOnlySuspicious || riskFilter !== 'all') && (
+                    <button
+                      onClick={() => {
+                        setShowOnlySuspicious(false);
+                        setRiskFilter('all');
+                      }}
+                      className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded border border-gray-300 transition font-medium flex-1"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                  <button
+                    onClick={fitToScreen}
+                    className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition font-medium flex-1"
+                  >
+                    Fit to View
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
           
-          <div className="mt-4 pt-4 border-t border-white/10">
-            <div className="glass px-4 py-3 rounded-lg">
-              <p className="text-xs text-gray-400">
-                💡 <strong className="text-blue-400">Pro Tip:</strong> Click nodes for focus mode • Hover to reveal connections • Zoom for labels
-              </p>
-            </div>
+          {/* Info Banner */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+            <p className="text-xs text-blue-900">
+              <strong className="font-semibold">Tip:</strong> Click nodes to view details • Hover to reveal connections • Use scroll wheel to zoom • Drag to pan the network
+            </p>
           </div>
           
           {/* Search Section */}
-          <div className="mt-4 pt-4 border-t border-white/10">
+          <div className="mt-4 pt-4 border-t border-gray-200">
             <div className="flex items-center gap-3">
-              <div className="glass px-3 py-2 rounded-lg">
-                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex-shrink-0 bg-gray-100 border border-gray-300 p-2 rounded">
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
@@ -636,21 +764,21 @@ function GraphVisualization({ data, graphData }) {
                 value={searchAccountId}
                 onChange={(e) => setSearchAccountId(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="Search account ID..."
-                className="flex-1 text-sm glass border-0 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Search by account ID..."
+                className="flex-1 text-sm border border-gray-300 rounded px-4 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <button
                 onClick={handleSearch}
-                className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-5 py-2.5 rounded-lg transition font-semibold shadow-lg hover:shadow-blue-500/50"
+                className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded transition font-medium"
               >
-                Find
+                Search
               </button>
             </div>
             {searchMessage && (
-              <div className={`mt-3 text-xs px-4 py-2 rounded-lg glass-card font-semibold ${
-                searchMessage.includes('✓') ? 'text-green-400 border-green-500/20' :
-                searchMessage.includes('❌') ? 'text-red-400 border-red-500/20' :
-                'text-yellow-400 border-yellow-500/20'
+              <div className={`mt-3 text-xs px-4 py-2 rounded border font-medium ${
+                searchMessage.includes('Focused') ? 'bg-green-50 text-green-800 border-green-200' :
+                searchMessage.includes('not found') ? 'bg-red-50 text-red-800 border-red-200' :
+                'bg-yellow-50 text-yellow-800 border-yellow-200'
               }`}>
                 {searchMessage}
               </div>
@@ -658,24 +786,15 @@ function GraphVisualization({ data, graphData }) {
           </div>
         </div>
 
-        {/* Premium Graph Container */}
-        <div className="glass-card border-white/10 rounded-2xl overflow-hidden shadow-2xl relative w-full" 
-             style={{ 
-               background: 'linear-gradient(135deg, rgba(26, 31, 46, 0.9) 0%, rgba(45, 55, 72, 0.8) 50%, rgba(26, 32, 44, 0.9) 100%)',
-               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
-               minHeight: '600px'
-             }}>
-          {/* Subtle animated gradient overlay */}
-          <div className="absolute inset-0 pointer-events-none" style={{
-            background: 'radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.05) 0%, transparent 70%)',
-            animation: 'pulse-glow 4s ease-in-out infinite'
-          }}></div>
+        {/* Graph Container */}
+        <div className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shadow-sm relative" 
+             style={{ minHeight: '600px' }}>
           <CytoscapeComponent
             elements={cytoscapeElements}
             style={{ 
               width: `${dimensions.width}px`, 
               height: `${dimensions.height}px`,
-              background: 'transparent'
+              background: '#FAFAFA'
             }}
             stylesheet={cytoscapeStylesheet}
             layout={layoutConfig}
@@ -684,60 +803,76 @@ function GraphVisualization({ data, graphData }) {
           />
         </div>
         
-        {/* Premium Controls Info */}
-        <div className="mt-4 text-xs text-center glass px-6 py-3 rounded-xl border border-white/10 shadow-lg">
-          <span className="text-gray-400">
-            🕹️ <strong className="text-blue-400">Navigation:</strong> Drag to pan • Scroll to zoom • Click to investigate • Hover for intel
+        {/* Controls Info */}
+        <div className="mt-4 text-xs text-center bg-gray-50 border border-gray-200 px-6 py-3 rounded-lg">
+          <span className="text-gray-600">
+            <strong className="text-gray-900">Navigation:</strong> Drag to pan • Scroll to zoom • Click to investigate • Hover for details
           </span>
         </div>
       </div>
 
       {/* Side Panel */}
       {selectedNode && (
-        <div className="w-80 bg-white border-2 border-gray-300 rounded-lg shadow-xl p-4 overflow-y-auto max-h-[750px]">
+        <div className="w-80 bg-white border border-gray-200 rounded-lg shadow-lg p-5 overflow-y-auto max-h-[750px]">
           <div className="flex justify-between items-start mb-4">
-            <h3 className="text-lg font-bold text-gray-800">Node Details</h3>
+            <h3 className="text-lg font-bold text-gray-900">Account Details</h3>
             <button
               onClick={() => setSelectedNode(null)}
-              className="text-gray-500 hover:text-gray-700 transition"
+              className="text-gray-400 hover:text-gray-600 transition"
             >
-              ✕
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
 
           <div className="space-y-3">
             {/* Account ID */}
-            <div className="bg-gray-50 p-3 rounded border border-gray-200">
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
               <div className="text-xs text-gray-500 uppercase font-semibold mb-1">Account ID</div>
-              <div className="text-lg font-bold text-gray-800">{selectedNode.id}</div>
+              <div className="text-base font-mono font-bold text-gray-900 break-all">{selectedNode.id}</div>
             </div>
 
             {/* Status Badge */}
-            <div className={`p-3 rounded border-2 ${
+            <div className={`p-3 rounded-lg border-2 ${
               selectedNode.suspicious 
                 ? 'bg-red-50 border-red-300' 
                 : 'bg-green-50 border-green-300'
             }`}>
               <div className="text-xs text-gray-600 uppercase font-semibold mb-1">Status</div>
-              <div className={`text-lg font-bold ${
-                selectedNode.suspicious ? 'text-red-600' : 'text-green-600'
+              <div className={`text-base font-bold flex items-center gap-2 ${
+                selectedNode.suspicious ? 'text-red-700' : 'text-green-700'
               }`}>
-                {selectedNode.suspicious ? '⚠️ SUSPICIOUS' : '✓ NORMAL'}
+                {selectedNode.suspicious ? (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    SUSPICIOUS
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    NORMAL
+                  </>
+                )}
               </div>
             </div>
 
             {/* Suspicion Score */}
             {selectedNode.suspicious && (
-              <div className="bg-gradient-to-r from-red-50 to-orange-50 p-3 rounded border border-red-200">
+              <div className="bg-gradient-to-r from-red-50 to-orange-50 p-3 rounded-lg border border-red-200">
                 <div className="text-xs text-gray-600 uppercase font-semibold mb-1">Suspicion Score</div>
-                <div className="flex items-center gap-2">
-                  <div className="text-3xl font-bold text-red-600">{selectedNode.suspicionScore}</div>
-                  <div className="text-xs text-gray-500">/100</div>
+                <div className="flex items-baseline gap-2 mb-2">
+                  <div className="text-3xl font-bold text-red-700">{selectedNode.suspicionScore}</div>
+                  <div className="text-sm text-gray-500">/ 100</div>
                 </div>
-                <div className="mt-2 bg-gray-200 rounded-full h-2">
+                <div className="bg-gray-200 rounded-full h-2">
                   <div
                     className={`h-2 rounded-full ${
-                      selectedNode.suspicionScore >= 60 ? 'bg-red-500' :
+                      selectedNode.suspicionScore >= 60 ? 'bg-red-600' :
                       selectedNode.suspicionScore >= 30 ? 'bg-orange-500' :
                       'bg-yellow-400'
                     }`}
@@ -749,21 +884,26 @@ function GraphVisualization({ data, graphData }) {
 
             {/* Ring ID */}
             {selectedNode.ringId && (
-              <div className="bg-orange-50 p-3 rounded border border-orange-200">
-                <div className="text-xs text-gray-600 uppercase font-semibold mb-1">🔗 Fraud Ring</div>
-                <div className="text-lg font-bold text-orange-600">{selectedNode.ringId}</div>
+              <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+                <div className="text-xs text-gray-600 uppercase font-semibold mb-1 flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  Fraud Ring
+                </div>
+                <div className="text-base font-mono font-bold text-orange-700">{selectedNode.ringId}</div>
               </div>
             )}
 
             {/* Detected Patterns */}
             {selectedNode.patterns && selectedNode.patterns.length > 0 && (
-              <div className="bg-purple-50 p-3 rounded border border-purple-200">
+              <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
                 <div className="text-xs text-gray-600 uppercase font-semibold mb-2">Detected Patterns</div>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-2">
                   {selectedNode.patterns.map((pattern, idx) => (
                     <span
                       key={idx}
-                      className="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded-full font-medium"
+                      className="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded font-medium"
                     >
                       {pattern.replace(/_/g, ' ')}
                     </span>
@@ -773,37 +913,44 @@ function GraphVisualization({ data, graphData }) {
             )}
 
             {/* Transaction Stats */}
-            <div className="bg-blue-50 p-3 rounded border border-blue-200">
-              <div className="text-xs text-gray-600 uppercase font-semibold mb-2">Transaction Stats</div>
-              <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+              <div className="text-xs text-gray-600 uppercase font-semibold mb-3">Transaction Statistics</div>
+              <div className="grid grid-cols-3 gap-3 text-center">
                 <div>
-                  <div className="text-2xl font-bold text-blue-600">{selectedNode.totalTransactions || 0}</div>
-                  <div className="text-xs text-gray-600">Total</div>
+                  <div className="text-2xl font-bold text-blue-700">{selectedNode.totalTransactions || 0}</div>
+                  <div className="text-xs text-gray-600 mt-1">Total</div>
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-green-600">{selectedNode.inDegree || 0}</div>
-                  <div className="text-xs text-gray-600">Incoming</div>
+                  <div className="text-xs text-gray-600 mt-1">Incoming</div>
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-orange-600">{selectedNode.outDegree || 0}</div>
-                  <div className="text-xs text-gray-600">Outgoing</div>
+                  <div className="text-xs text-gray-600 mt-1">Outgoing</div>
                 </div>
               </div>
             </div>
 
-            {/* Color Indicator */}
-            <div className="bg-gray-50 p-3 rounded border border-gray-200">
-              <div className="text-xs text-gray-600 uppercase font-semibold mb-2">Risk Level</div>
-              <div className="flex items-center gap-2">
+            {/* Risk Level Indicator */}
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+              <div className="text-xs text-gray-600 uppercase font-semibold mb-2">Risk Classification</div>
+              <div className="flex items-center gap-3">
                 <div
-                  className="w-6 h-6 rounded-full border-2 border-white shadow"
+                  className="w-8 h-8 rounded-full border-2 border-white shadow-sm flex-shrink-0"
                   style={{ backgroundColor: getNodeColor(selectedNode) }}
                 ></div>
-                <span className="text-sm font-medium text-gray-700">
-                  {selectedNode.suspicionScore >= 60 ? 'High Risk' :
-                   selectedNode.suspicionScore >= 30 ? 'Medium Risk' :
-                   selectedNode.suspicionScore >= 1 ? 'Low Risk' : 'Normal'}
-                </span>
+                <div>
+                  <div className="text-sm font-bold text-gray-900">
+                    {selectedNode.suspicionScore >= 60 ? 'Critical Risk' :
+                     selectedNode.suspicionScore >= 30 ? 'High Risk' :
+                     selectedNode.suspicionScore >= 1 ? 'Medium Risk' : 'Normal Activity'}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {selectedNode.suspicionScore >= 60 ? 'Immediate investigation required' :
+                     selectedNode.suspicionScore >= 30 ? 'Review recommended' :
+                     selectedNode.suspicionScore >= 1 ? 'Monitor activity' : 'No action needed'}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -1,4 +1,4 @@
-# 👁️ Fraud Netra: Graph-Based Financial Crime Detection Engine  
+# Fraud Netra: Graph-Based Financial Crime Detection Engine  
 ### RIFT 2026 Hackathon | Money Muling Detection Challenge
 
 [![Live Demo](https://img.shields.io/badge/demo-live_now-green?style=for-the-badge)](YOUR_LIVE_URL_HERE)  

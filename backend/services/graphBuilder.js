@@ -3,10 +3,13 @@
  * Following RIFT_2026_HACKATHON.md specification
  */
 export const buildGraph = (transactions) => {
+  const startTime = Date.now();
   const graph = {
     nodes: new Map(),
     edges: []
   };
+
+  console.log(`     Building graph from ${transactions.length} transactions...`);
 
   // Initialize or update nodes and edges
   transactions.forEach(tx => {
@@ -59,6 +62,9 @@ export const buildGraph = (transactions) => {
     receiverNode.in_degree++;
     receiverNode.total_transactions++;
   });
+
+  const buildTime = ((Date.now() - startTime) / 1000).toFixed(3);
+  console.log(`     Graph built: ${graph.nodes.size} nodes, ${graph.edges.length} edges (${buildTime}s)`);
 
   return graph;
 };

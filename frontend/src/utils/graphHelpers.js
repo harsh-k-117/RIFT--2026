@@ -45,7 +45,7 @@ export const getNodeSize = (node) => {
  */
 export const getNodeLabel = (node) => {
   if (node.suspicious) {
-    return `${node.id}\n⚠️ Score: ${node.suspicionScore}`;
+    return `${node.id}\nScore: ${node.suspicionScore}`;
   }
   return node.id;
 };
