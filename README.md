@@ -295,3 +295,4 @@ Fraud Netra transforms raw transaction data into a structured financial investig
 
 Built to satisfy all RIFT 2026 evaluation requirements.
 
+*Prototype*
